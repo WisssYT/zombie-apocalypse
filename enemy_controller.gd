@@ -16,10 +16,13 @@ var health := 75.0
 var dead := false
 var climbing := true
 var climb_start := Vector3.ZERO
+var climb_reveal := Vector3.ZERO
 var climb_top := Vector3.ZERO
 var landing := Vector3.ZERO
 var climb_time := 0.0
 var climb_duration := 5.0
+# Time spent scrambling up from the hidden spawn to climb_reveal, before the normal climb.
+var rush_duration := 0.0
 var heading := Vector3.FORWARD
 var momentum := Vector3.ZERO
 var state := "chase"
@@ -50,6 +53,8 @@ func _ready() -> void:
 		health = 50.0
 		visuals.scale = Vector3.ONE * 1.4
 	visual_home = visuals.transform
+	if rush_duration <= 0.0:
+		climb_reveal = climb_start
 	var model_path := "res://models/bitkiln/"
 	if is_hound:
 		model_path += "hound_flayed.glb" if randf() < 0.5 else "hound_black.glb"
@@ -240,16 +245,23 @@ func update_marker() -> void:
 
 func update_climb(delta: float) -> void:
 	climb_time += delta
-	play_clip("Walk", 1.2)
-	if climb_time < climb_duration:
-		global_position = climb_start.lerp(climb_top, clampf(climb_time / climb_duration, 0, 1))
+	var time := climb_time - rush_duration
+	if time < 0.0:
+		play_clip("Walk", 2.4)
+		global_position = climb_start.lerp(climb_reveal, climb_time / rush_duration)
 		visuals.rotation.x = -0.25
-		visuals.rotation.z = sin(climb_time * 6) * 0.09
+		visuals.rotation.z = sin(climb_time * 12) * 0.09
+		return
+	play_clip("Walk", 1.2)
+	if time < climb_duration:
+		global_position = climb_reveal.lerp(climb_top, clampf(time / climb_duration, 0, 1))
+		visuals.rotation.x = -0.25
+		visuals.rotation.z = sin(time * 6) * 0.09
 	else:
-		var progress := smoothstep(climb_duration, climb_duration + 0.8, climb_time)
+		var progress := smoothstep(climb_duration, climb_duration + 0.8, time)
 		global_position = climb_top.lerp(landing, progress)
 		visuals.rotation.x = -sin(progress * PI) * 0.5
-	if climb_time >= climb_duration + 0.8:
+	if time >= climb_duration + 0.8:
 		climbing = false
 		collision_mask = 1
 		visuals.rotation = Vector3.ZERO
