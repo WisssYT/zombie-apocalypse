@@ -73,11 +73,17 @@ func build(hound: bool, launch: Vector3) -> void:
    ["RightLowerLeg", "RightFoot", 0.06, 1.0]]
  var material := PhysicsMaterial.new()
  material.friction = 0.85
- material.bounce = 0.15
+ material.bounce = 0.0
  var scale_factor := skeleton.global_basis.get_scale().x
- var spin_axis := Vector3.UP.cross(launch).normalized()
- if spin_axis.length_squared() < 0.01:
-  spin_axis = Vector3.RIGHT
+ # The feet act as the pivot: horizontal launch topples the body, little of it slides it.
+ var pivot := visual_root.global_position
+ var horizontal := Vector3(launch.x, 0.0, launch.z)
+ var lift := Vector3(0.0, maxf(launch.y, 0.0), 0.0)
+ var push := horizontal * 0.25
+ var hip_height := 0.9 * scale_factor
+ var spin := Vector3.ZERO
+ if horizontal.length_squared() > 0.01:
+  spin = Vector3.UP.cross(horizontal.normalized()) * minf(horizontal.length() * 0.75 / hip_height, 5.0)
  for segment in segments:
   var index := skeleton.find_bone(segment[0])
   if index < 0:
@@ -99,7 +105,7 @@ func build(hound: bool, launch: Vector3) -> void:
   body.collision_layer = 0
   body.collision_mask = 8
   body.linear_damp = 0.3
-  body.angular_damp = 1.0
+  body.angular_damp = 2.0
   body.physics_material_override = material
   var shape := CapsuleShape3D.new()
   shape.radius = float(segment[2]) * scale_factor
@@ -110,23 +116,46 @@ func build(hound: bool, launch: Vector3) -> void:
   add_child(body)
   var axis := direction.normalized() if direction.length() > 0.001 else Vector3.UP
   body.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, axis)), pose.origin.lerp(end, 0.5))
-  body.linear_velocity = launch
-  body.angular_velocity = spin_axis * 4.5 + Vector3(0, randf_range(-2.0, 2.0), 0)
+  # One shared rotation about the feet: the body tips over instead of every limb spinning alone.
+  body.angular_velocity = spin
+  body.linear_velocity = lift + push + spin.cross(body.global_position - pivot)
   bodies[index] = body
   bone_offsets[index] = body.global_transform.affine_inverse() * pose
- # Point joints keep the skeleton together while allowing deliberately floppy limbs.
+ # Each limb is jointed to its nearest simulated parent bone.
  for index in bodies:
   var parent_index := skeleton.get_bone_parent(index)
   while parent_index >= 0 and not bodies.has(parent_index):
    parent_index = skeleton.get_bone_parent(parent_index)
   if parent_index < 0:
    continue
-  var joint := PinJoint3D.new()
+  # Cone joints keep limbs floppy but stop heads and knees from spinning freely.
+  var joint := ConeTwistJoint3D.new()
+  var limits := joint_limits(skeleton.get_bone_name(index))
+  joint.set_param(ConeTwistJoint3D.PARAM_SWING_SPAN, limits.x)
+  joint.set_param(ConeTwistJoint3D.PARAM_TWIST_SPAN, limits.y)
+  joint.set_param(ConeTwistJoint3D.PARAM_SOFTNESS, 0.9)
+  joint.set_param(ConeTwistJoint3D.PARAM_RELAXATION, 1.0)
   add_child(joint)
-  joint.global_position = (skeleton.global_transform * skeleton.get_bone_global_pose(index)).origin
+  # The cone's axis (local X) points along the child limb as it was when the body fell.
+  var limb_axis: Vector3 = bodies[index].global_basis.y.normalized()
+  joint.global_transform = Transform3D(Basis(Quaternion(Vector3.RIGHT, limb_axis)), (skeleton.global_transform * skeleton.get_bone_global_pose(index)).origin)
   joint.node_a = joint.get_path_to(bodies[parent_index])
   joint.node_b = joint.get_path_to(bodies[index])
   joint.exclude_nodes_from_collision = true
+
+static func joint_limits(bone: String) -> Vector2:
+ # x = swing cone, y = twist, both in radians.
+ if bone.ends_with("UpperArm"):
+  return Vector2(1.3, 0.7)
+ if bone.ends_with("UpperLeg") or bone.ends_with("Upper"):
+  return Vector2(0.9, 0.35)
+ if bone.ends_with("Lower") or bone.ends_with("LowerArm") or bone.ends_with("LowerLeg") or bone.ends_with("Hock"):
+  return Vector2(1.1, 0.15)
+ if bone == "Head":
+  return Vector2(0.6, 0.5)
+ if bone.begins_with("Tail"):
+  return Vector2(0.8, 0.3)
+ return Vector2(0.45, 0.25)
 
 func _physics_process(delta: float) -> void:
  age += delta

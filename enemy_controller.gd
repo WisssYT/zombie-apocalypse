@@ -290,7 +290,7 @@ func knock_down(launch: Vector3, duration := 1.9) -> void:
 	warning.hide()
 	momentum = launch.limit_length(10.0)
 	# Creating physics bodies is deferred until the current collision step finishes.
-	start_ragdoll.call_deferred(momentum + Vector3.UP * 2.2)
+	start_ragdoll.call_deferred(momentum)
 
 func start_ragdoll(launch: Vector3) -> void:
 	if is_instance_valid(ragdoll):
@@ -362,8 +362,8 @@ func take_damage(amount: float, hit_direction := Vector3.ZERO) -> void:
 			remove_from_group("hounds")
 		get_tree().current_scene.register_kill()
 		var direction := last_hit_direction if last_hit_direction.length_squared() > 0.001 else -heading
-		var launch := momentum * 0.65 + direction * 8.5 + Vector3.UP * 4.0
-		start_ragdoll.call_deferred(launch.limit_length(15.0))
+		var launch := momentum * 0.5 + direction * 4.5 + Vector3.UP * 0.8
+		start_ragdoll.call_deferred(launch.limit_length(9.0))
 		get_tree().create_timer(7.5).timeout.connect(queue_free)
 
 func _exit_tree() -> void:
