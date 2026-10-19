@@ -8,16 +8,15 @@
 [ext_resource type="AudioStream" uid="uid://by2fxg1qmkkhx" path="res://audio/reload.wav" id="6_reload"]
 [ext_resource type="AudioStream" uid="uid://bhr0vkutp3or0" path="res://audio/dry_fire.wav" id="7_empty"]
 [ext_resource type="AudioStream" uid="uid://brmx2w8efugvr" path="res://audio/hurt.wav" id="8_hurt"]
-
 [ext_resource type="Script" path="res://survivor_visual.gd" id="9_survivor_visual"]
-[ext_resource type="PackedScene" path="res://models/psx_people/glb/survivor_woman.glb" id="10_survivor"]
+[ext_resource type="PackedScene" uid="uid://d28km60cevr1x" path="res://models/psx_people/glb/survivor_woman.glb" id="10_survivor"]
 [ext_resource type="PackedScene" path="res://apocalyptic_city.tscn" id="11_city"]
-[ext_resource type="Texture2D" path="res://models/apocalyptic_city/concrete.jpg" id="12_concrete"]
+[ext_resource type="Texture2D" uid="uid://bfaa1gr8imtun" path="res://models/apocalyptic_city/concrete.jpg" id="12_concrete"]
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_e2o6t"]
+albedo_color = Color(0.04904674, 0.049050905, 0.15296969, 1)
 albedo_texture = ExtResource("12_concrete")
-texture_filter = 3
 uv1_scale = Vector3(8, 5, 1)
-roughness = 1.0
 
 [sub_resource type="BoxMesh" id="BoxMesh_mwb40"]
 
@@ -38,6 +37,7 @@ script = ExtResource("4_survival")
 
 [node name="Ground _ StaticBody3D" type="StaticBody3D" parent="." unique_id=2035689127]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+collision_layer = 9
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Ground _ StaticBody3D" unique_id=97492993]
 transform = Transform3D(32, 0, 0, 0, 0.4, 0, 0, 0, 20, 0, -0.2, 0)
@@ -50,7 +50,7 @@ shape = SubResource("BoxShape3D_80nbo")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1379407526]
 transform = Transform3D(0.8660254, 0.43301272, -0.24999999, 0, 0.49999997, 0.86602545, 0.5, -0.75, 0.43301266, 0, 0, 0)
-light_color = Color(1, 0.90, 0.73, 1)
+light_color = Color(1, 0.9, 0.73, 1)
 light_energy = 1.1
 shadow_enabled = true
 
@@ -106,13 +106,13 @@ volume_db = -9.0
 stream = ExtResource("8_hurt")
 volume_db = -7.0
 
-[node name="FloorBorder" parent="." unique_id=1795844686 instance=ExtResource("2_floor_border")]
-
-[node name="CharacterVisual" type="Node3D" parent="Player _ CharacterBody3D"]
-position = Vector3(0, -1, 0)
+[node name="CharacterVisual" type="Node3D" parent="Player _ CharacterBody3D" unique_id=830610486]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
 script = ExtResource("9_survivor_visual")
 
-[node name="Model" parent="Player _ CharacterBody3D/CharacterVisual" instance=ExtResource("10_survivor")]
-rotation = Vector3(0, 3.14159265, 0)
+[node name="Model" parent="Player _ CharacterBody3D/CharacterVisual" unique_id=1107073282 instance=ExtResource("10_survivor")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, 0)
 
-[node name="ApocalypticCity" parent="." instance=ExtResource("11_city")]
+[node name="FloorBorder" parent="." unique_id=1795844686 instance=ExtResource("2_floor_border")]
+
+[node name="ApocalypticCity" parent="." unique_id=313594810 instance=ExtResource("11_city")]

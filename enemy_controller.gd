@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+const RAGDOLL = preload("res://enemy_ragdoll.gd")
+
 @export var is_hound := false
 @export var speed := 6.3
 @export var acceleration := 9.0
@@ -29,6 +31,10 @@ var locked_charge := Vector3.FORWARD
 var attack_cooldown := 0.0
 var hit_flash := 0.0
 var age := 0.0
+var ragdoll: Node3D
+var visual_home: Transform3D
+var collision_stumble_cooldown := 0.8
+var last_hit_direction := Vector3.ZERO
 var animator: AnimationPlayer
 var active_animation := ""
 var meshes: Array[MeshInstance3D] = []
@@ -43,6 +49,7 @@ func _ready() -> void:
 		add_to_group("hounds")
 		health = 50.0
 		visuals.scale = Vector3.ONE * 1.4
+	visual_home = visuals.transform
 	var model_path := "res://models/bitkiln/"
 	if is_hound:
 		model_path += "hound_flayed.glb" if randf() < 0.5 else "hound_black.glb"
@@ -85,6 +92,10 @@ func play_clip(clip: String, rate := 1.0) -> void:
 
 func _physics_process(delta: float) -> void:
 	if dead:
+		return
+	collision_stumble_cooldown = maxf(0.0, collision_stumble_cooldown - delta)
+	if is_instance_valid(ragdoll):
+		update_ragdoll_recovery(delta)
 		return
 	if not is_instance_valid(player) or player.dead:
 		warning.hide()
@@ -138,7 +149,9 @@ func _physics_process(delta: float) -> void:
 	velocity.x = momentum.x
 	velocity.z = momentum.z
 	velocity.y = 0.0 if is_on_floor() else velocity.y - 9.8 * delta
+	var incoming := momentum
 	move_and_slide()
+	handle_enemy_collisions(incoming)
 	face_heading()
 	if state == "charge":
 		if can_hit_player(1.35):
@@ -172,8 +185,11 @@ func steer_toward(target: Vector3, delta: float) -> void:
 	else:
 		balance_stress = maxf(0.0, balance_stress - 4.0 * delta)
 	if balance_stress > 0.65:
-		state = "fallen" if absf(error) > 1.85 else "skid"
-		state_time = 1.35 if state == "fallen" else 0.85
+		if absf(error) > 1.85:
+			knock_down(momentum * 0.75, 1.6)
+		else:
+			state = "skid"
+			state_time = 0.85
 		balance_stress = 0.0
 
 func begin_charge_warning(target: Vector3) -> void:
@@ -242,9 +258,95 @@ func update_climb(delta: float) -> void:
 		heading = heading.normalized()
 		face_heading()
 
-func take_damage(amount: float) -> void:
+func handle_enemy_collisions(incoming: Vector3) -> void:
+	if climbing or dead or collision_stumble_cooldown > 0.0:
+		return
+	for index in range(get_slide_collision_count()):
+		var other = get_slide_collision(index).get_collider()
+		if not other is CharacterBody3D or not other.is_in_group("zombies"):
+			continue
+		if other.dead or other.climbing:
+			continue
+		if is_hound and state == "charge" and not other.is_hound:
+			other.knock_down(incoming * 0.7 + other.momentum * 0.25, 2.1)
+			continue
+		if is_hound or other.is_hound or state != "chase":
+			continue
+		# Side-swipes and head-on impacts count; gentle crowd contact does not.
+		var relative_speed: float = (incoming - other.momentum).length()
+		if incoming.length() >= 4.2 and relative_speed >= 3.0:
+			var impact: Vector3 = incoming * -0.45 + other.momentum * 0.25
+			other.knock_down(incoming * 0.6 + other.momentum * 0.3, 1.9)
+			knock_down(impact, 1.9)
+			break
+
+func knock_down(launch: Vector3, duration := 1.9) -> void:
+	if dead or climbing or state == "fallen" or collision_stumble_cooldown > 0.0:
+		return
+	state = "fallen"
+	state_time = duration
+	balance_stress = 0.0
+	collision_stumble_cooldown = duration + 1.3
+	warning.hide()
+	momentum = launch.limit_length(10.0)
+	# Creating physics bodies is deferred until the current collision step finishes.
+	start_ragdoll.call_deferred(momentum + Vector3.UP * 2.2)
+
+func start_ragdoll(launch: Vector3) -> void:
+	if is_instance_valid(ragdoll):
+		if dead:
+			ragdoll.is_corpse = true
+			ragdoll.kick(launch * 0.4)
+		return
+	if animator:
+		animator.pause()
+	ragdoll = RAGDOLL.create(visuals, is_hound, launch, dead)
+	if not is_instance_valid(ragdoll):
+		# Keep the existing fall/death animation if the physics budget is full.
+		active_animation = ""
+		play_clip("Death" if dead else "Hit", 0.7)
+		return
+	collision_mask = 0
+	marker.hide()
+	warning.hide()
+
+func update_ragdoll_recovery(delta: float) -> void:
+	state_time -= delta
+	var center: Vector3 = ragdoll.center()
+	global_position = center + Vector3.UP * 0.4
+	if center.y < -16.0:
+		queue_free()
+		return
+	if state_time > 0.0:
+		return
+	# Get up only above the arena; bodies thrown over an edge keep falling.
+	var query := PhysicsRayQueryParameters3D.create(center + Vector3.UP * 2.0, center + Vector3.DOWN * 3.0, 8)
+	var floor_hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if floor_hit.is_empty() or absf(center.x) > 15.5 or absf(center.z) > 9.5:
+		return
+	global_position = Vector3(center.x, floor_hit.position.y + 1.0, center.z)
+	ragdoll.release_visual(self, visual_home)
+	ragdoll = null
+	state = "recover"
+	state_time = 0.5
+	collision_stumble_cooldown = 1.3
+	grace_time = 1.0
+	momentum = Vector3.ZERO
+	velocity = Vector3.ZERO
+	collision_mask = 1
+	active_animation = ""
+	play_clip("Idle")
+	if animator:
+		animator.advance(0.0)
+
+func receive_projectile_hit(amount: float, direction: Vector3) -> void:
+	take_damage(amount, direction)
+
+func take_damage(amount: float, hit_direction := Vector3.ZERO) -> void:
 	if dead:
 		return
+	if hit_direction.length_squared() > 0.001:
+		last_hit_direction = hit_direction.normalized()
 	health -= amount
 	hit_flash = 0.15
 	hit_sound.play()
@@ -259,7 +361,11 @@ func take_damage(amount: float) -> void:
 		if is_in_group("hounds"):
 			remove_from_group("hounds")
 		get_tree().current_scene.register_kill()
-		visuals.rotation = Vector3.ZERO
-		visuals.position.y = -1.0
-		play_clip("Death")
-		get_tree().create_timer(2.4).timeout.connect(queue_free)
+		var direction := last_hit_direction if last_hit_direction.length_squared() > 0.001 else -heading
+		var launch := momentum * 0.65 + direction * 8.5 + Vector3.UP * 4.0
+		start_ragdoll.call_deferred(launch.limit_length(15.0))
+		get_tree().create_timer(7.5).timeout.connect(queue_free)
+
+func _exit_tree() -> void:
+	if is_instance_valid(ragdoll):
+		ragdoll.queue_free()
