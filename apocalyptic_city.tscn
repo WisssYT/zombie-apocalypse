@@ -153,3 +153,48 @@ scale = Vector3(0.68, 0.85, 0.68)
 position = Vector3(-65, -48.0509, 100)
 rotation = Vector3(0, 0, 0)
 scale = Vector3(0.38, 0.85, 0.38)
+
+[node name="Building 02" parent="RuinedTower04" index="0"]
+cast_shadow = 0
+
+[node name="Building 06" parent="RuinedTower05" index="0"]
+cast_shadow = 0
+
+[node name="Building 01" parent="RuinedTower06" index="0"]
+cast_shadow = 0
+
+[node name="Building 07" parent="RuinedTower08" index="0"]
+cast_shadow = 0
+
+[node name="Building 02" parent="RuinedTower09" index="0"]
+cast_shadow = 0
+
+[node name="Building 01" parent="RuinedTower10" index="0"]
+cast_shadow = 0
+
+[node name="Building 06" parent="RuinedTower11" index="0"]
+cast_shadow = 0
+
+[node name="Building 07" parent="RuinedTower12" index="0"]
+cast_shadow = 0
+
+[node name="Building 05" parent="RuinedTower13" index="0"]
+cast_shadow = 0
+
+[node name="Building 07" parent="RuinedTower15" index="0"]
+cast_shadow = 0
+
+[node name="Building 02" parent="RuinedTower16" index="0"]
+cast_shadow = 0
+
+[editable path="RuinedTower04"]
+[editable path="RuinedTower05"]
+[editable path="RuinedTower06"]
+[editable path="RuinedTower08"]
+[editable path="RuinedTower09"]
+[editable path="RuinedTower10"]
+[editable path="RuinedTower11"]
+[editable path="RuinedTower12"]
+[editable path="RuinedTower13"]
+[editable path="RuinedTower15"]
+[editable path="RuinedTower16"]
