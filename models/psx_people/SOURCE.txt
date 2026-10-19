@@ -1,0 +1,6 @@
+PSX People Free by heyheythere
+https://heyheythere.itch.io/psx-people-free
+Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Model used: survivor_woman.glb, with its atlas and animations.
+Changes: integrated into the player's controller; rifle arm poses and reload pose added at runtime.
+Downloaded 2026-10-19. Full license in LICENSE.txt.

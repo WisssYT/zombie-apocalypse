@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://enemy_controller.gd" id="1"]
+[ext_resource type="AudioStream" path="res://audio/hit.wav" id="2"]
+
+[sub_resource type="BoxShape3D" id="BodyShape"]
+size = Vector3(0.85, 1.35, 2.1)
+
+[sub_resource type="StandardMaterial3D" id="RingMaterial"]
+shading_mode = 0
+albedo_color = Color(1, 0.65, 0.1, 1)
+
+[sub_resource type="TorusMesh" id="RingMesh"]
+inner_radius = 0.58
+outer_radius = 0.67
+rings = 16
+ring_segments = 6
+
+[sub_resource type="StandardMaterial3D" id="WarningMaterial"]
+shading_mode = 0
+transparency = 1
+albedo_color = Color(1, 0.24, 0.06, 0.6)
+
+[sub_resource type="BoxMesh" id="WarningMesh"]
+material = SubResource("WarningMaterial")
+size = Vector3(0.75, 0.035, 9.1)
+
+[node name="Hound" type="CharacterBody3D"]
+floor_snap_length = 0.2
+script = ExtResource("1")
+is_hound = true
+speed = 8.0
+turn_speed = 2.1
+acceleration = 12.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, -0.325, 0)
+shape = SubResource("BodyShape")
+
+[node name="Visuals" type="Node3D" parent="."]
+position = Vector3(0, -1, 0)
+
+[node name="StateRing" type="MeshInstance3D" parent="."]
+visible = false
+position = Vector3(0, -0.94, 0)
+cast_shadow = 0
+mesh = SubResource("RingMesh")
+material_override = SubResource("RingMaterial")
+
+[node name="ChargeWarning" type="MeshInstance3D" parent="."]
+visible = false
+cast_shadow = 0
+mesh = SubResource("WarningMesh")
+
+[node name="HitSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("2")
+volume_db = -9.0

@@ -1,0 +1,113 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="Metal"]
+albedo_color = Color(0.12, 0.17, 0.23, 1)
+metallic = 0.5
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Grip"]
+albedo_color = Color(0.035, 0.045, 0.06, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Accent"]
+albedo_color = Color(1, 0.66, 0.08, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="ReceiverMesh"]
+material = SubResource("Metal")
+size = Vector3(0.22, 0.2, 0.48)
+
+[sub_resource type="BoxMesh" id="StockMesh"]
+material = SubResource("Grip")
+size = Vector3(0.17, 0.16, 0.28)
+
+[sub_resource type="BoxMesh" id="ButtMesh"]
+material = SubResource("Grip")
+size = Vector3(0.2, 0.24, 0.07)
+
+[sub_resource type="BoxMesh" id="BarrelMesh"]
+material = SubResource("Metal")
+size = Vector3(0.09, 0.09, 0.32)
+
+[sub_resource type="BoxMesh" id="MuzzleBrakeMesh"]
+material = SubResource("Grip")
+size = Vector3(0.13, 0.13, 0.13)
+
+[sub_resource type="BoxMesh" id="MagazineMesh"]
+material = SubResource("Grip")
+size = Vector3(0.13, 0.25, 0.17)
+
+[sub_resource type="BoxMesh" id="HandleMesh"]
+material = SubResource("Grip")
+size = Vector3(0.11, 0.22, 0.12)
+
+[sub_resource type="BoxMesh" id="TopRailMesh"]
+material = SubResource("Grip")
+size = Vector3(0.1, 0.04, 0.36)
+
+[sub_resource type="BoxMesh" id="RearSightMesh"]
+material = SubResource("Accent")
+size = Vector3(0.09, 0.07, 0.06)
+
+[sub_resource type="BoxMesh" id="FrontSightMesh"]
+material = SubResource("Accent")
+size = Vector3(0.055, 0.08, 0.055)
+
+[sub_resource type="BoxMesh" id="LeftStripeMesh"]
+material = SubResource("Accent")
+size = Vector3(0.015, 0.07, 0.27)
+
+[sub_resource type="BoxMesh" id="RightStripeMesh"]
+material = SubResource("Accent")
+size = Vector3(0.015, 0.07, 0.27)
+
+[node name="GunModel" type="Node3D"]
+
+[node name="Receiver" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0, 0)
+mesh = SubResource("ReceiverMesh")
+
+[node name="Stock" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.015, 0.34)
+mesh = SubResource("StockMesh")
+
+[node name="Butt" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.02, 0.49)
+mesh = SubResource("ButtMesh")
+
+[node name="Barrel" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.025, -0.4)
+mesh = SubResource("BarrelMesh")
+
+[node name="MuzzleBrake" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.025, -0.61)
+mesh = SubResource("MuzzleBrakeMesh")
+
+[node name="Magazine" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.19, -0.04)
+mesh = SubResource("MagazineMesh")
+
+[node name="Handle" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.18, 0.17)
+mesh = SubResource("HandleMesh")
+
+[node name="TopRail" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.12, -0.01)
+mesh = SubResource("TopRailMesh")
+
+[node name="RearSight" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.16, 0.12)
+mesh = SubResource("RearSightMesh")
+
+[node name="FrontSight" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.11, -0.48)
+mesh = SubResource("FrontSightMesh")
+
+[node name="LeftStripe" type="MeshInstance3D" parent="."]
+position = Vector3(-0.116, 0.025, -0.01)
+mesh = SubResource("LeftStripeMesh")
+
+[node name="RightStripe" type="MeshInstance3D" parent="."]
+position = Vector3(0.116, 0.025, -0.01)
+mesh = SubResource("RightStripeMesh")
+

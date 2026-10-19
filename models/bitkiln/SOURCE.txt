@@ -1,0 +1,4 @@
+Art by bitkiln: PSX Horror Monsters Free Sampler
+Source: https://bitkiln.itch.io/psx-horror-monsters-free-sampler
+Included here: Shambler (worker/patient), Hound (flayed/black), embedded textures and animations.
+See LICENSE.txt for the author's permission and restrictions.

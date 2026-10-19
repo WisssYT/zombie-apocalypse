@@ -1,0 +1,25 @@
+CHARACTER ART
+
+Survivor:
+PSX People Free by heyheythere
+https://heyheythere.itch.io/psx-people-free
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Changes: player controller integration, runtime rifle and reload arm poses.
+
+Zombies and hounds:
+Art by bitkiln - PSX Horror Monsters Free Sampler
+https://bitkiln.itch.io/psx-horror-monsters-free-sampler
+License included in models/bitkiln/LICENSE.txt.
+
+GUNSHOT
+Sci Fi Gun Shot by SoundReality (Jurij)
+https://pixabay.com/sound-effects/film-special-effects-sci-fi-gun-shot-312659/
+Pixabay Content License: https://pixabay.com/service/license-summary/
+
+APOCALYPTIC CITY
+3D Apocalyptic Building / City by Majadroid (Maik Hoffmann)
+https://opengameart.org/content/3d-apocalyptic-building-city-cc0
+CC0 / Public Domain. Original license: models/apocalyptic_city/LICENSE.txt
+Textures from cc0textures.com, included in the original pack.
+Changes: converted FBX to GLB, reduced embedded textures to 256px,
+trimmed one building below its roof for the existing arena; scaled and placed towers.

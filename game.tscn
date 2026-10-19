@@ -1,0 +1,118 @@
+[gd_scene format=3 uid="uid://cqbxbonp6tacj"]
+
+[ext_resource type="Script" uid="uid://clmge6k34lyn1" path="res://player___character_body_3d.gd" id="1_80nbo"]
+[ext_resource type="PackedScene" path="res://floor_border.tscn" id="2_floor_border"]
+[ext_resource type="PackedScene" path="res://gun_model.tscn" id="3_gun"]
+[ext_resource type="Script" uid="uid://c6imqkxmn4ph" path="res://survival.gd" id="4_survival"]
+[ext_resource type="AudioStream" uid="uid://dvxhle6usdnl" path="res://audio/sci_fi_gun_shot_312659.mp3" id="5_shoot"]
+[ext_resource type="AudioStream" uid="uid://by2fxg1qmkkhx" path="res://audio/reload.wav" id="6_reload"]
+[ext_resource type="AudioStream" uid="uid://bhr0vkutp3or0" path="res://audio/dry_fire.wav" id="7_empty"]
+[ext_resource type="AudioStream" uid="uid://brmx2w8efugvr" path="res://audio/hurt.wav" id="8_hurt"]
+
+[ext_resource type="Script" path="res://survivor_visual.gd" id="9_survivor_visual"]
+[ext_resource type="PackedScene" path="res://models/psx_people/glb/survivor_woman.glb" id="10_survivor"]
+[ext_resource type="PackedScene" path="res://apocalyptic_city.tscn" id="11_city"]
+[ext_resource type="Texture2D" path="res://models/apocalyptic_city/concrete.jpg" id="12_concrete"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_e2o6t"]
+albedo_texture = ExtResource("12_concrete")
+texture_filter = 3
+uv1_scale = Vector3(8, 5, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_mwb40"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_80nbo"]
+size = Vector3(32, 50, 20)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_80nbo"]
+albedo_color = Color(0.2360644, 0.41411027, 1, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_mwb40"]
+radius = 0.4
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_80nbo"]
+radius = 0.4
+
+[node name="Game" type="Node3D" unique_id=1015537956]
+script = ExtResource("4_survival")
+
+[node name="Ground _ StaticBody3D" type="StaticBody3D" parent="." unique_id=2035689127]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground _ StaticBody3D" unique_id=97492993]
+transform = Transform3D(32, 0, 0, 0, 0.4, 0, 0, 0, 20, 0, -0.2, 0)
+material_override = SubResource("StandardMaterial3D_e2o6t")
+mesh = SubResource("BoxMesh_mwb40")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground _ StaticBody3D" unique_id=343845776]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -25, 0)
+shape = SubResource("BoxShape3D_80nbo")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1379407526]
+transform = Transform3D(0.8660254, 0.43301272, -0.24999999, 0, 0.49999997, 0.86602545, 0.5, -0.75, 0.43301266, 0, 0, 0)
+light_color = Color(1, 0.90, 0.73, 1)
+light_energy = 1.1
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=921942614]
+transform = Transform3D(0.9985082, 0.006358876, 0.05423051, -0.04301688, 0.7033199, 0.70957077, -0.033629324, -0.71084505, 0.7025443, 0.74957275, 15, 16.67566)
+projection = 1
+current = true
+size = 34.0
+
+[node name="Player _ CharacterBody3D" type="CharacterBody3D" parent="." unique_id=353800311]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.01, 0)
+script = ExtResource("1_80nbo")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Player _ CharacterBody3D" unique_id=774499914]
+visible = false
+layers = 2
+material_override = SubResource("StandardMaterial3D_80nbo")
+mesh = SubResource("CapsuleMesh_mwb40")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player _ CharacterBody3D" unique_id=1986073237]
+shape = SubResource("CapsuleShape3D_80nbo")
+
+[node name="WeaponPivot" type="Node3D" parent="Player _ CharacterBody3D" unique_id=601638612]
+
+[node name="GunModel" parent="Player _ CharacterBody3D/WeaponPivot" unique_id=1277734923 instance=ExtResource("3_gun")]
+transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0.35, 0.237, -0.4405)
+
+[node name="Muzzle" type="Marker3D" parent="Player _ CharacterBody3D/WeaponPivot" unique_id=946453149]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 0.25325, -0.8955)
+
+[node name="FirstPersonRig" type="Node3D" parent="Player _ CharacterBody3D" unique_id=1843963537]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+
+[node name="FirstPersonCamera" type="Camera3D" parent="Player _ CharacterBody3D/FirstPersonRig" unique_id=1514559797]
+cull_mask = 1048573
+fov = 85.0
+near = 0.04
+
+[node name="ShootSound" type="AudioStreamPlayer" parent="Player _ CharacterBody3D" unique_id=738350527]
+stream = ExtResource("5_shoot")
+volume_db = -6.0
+max_polyphony = 12
+
+[node name="ReloadSound" type="AudioStreamPlayer" parent="Player _ CharacterBody3D" unique_id=1628601293]
+stream = ExtResource("6_reload")
+volume_db = -7.0
+
+[node name="EmptySound" type="AudioStreamPlayer" parent="Player _ CharacterBody3D" unique_id=852626915]
+stream = ExtResource("7_empty")
+volume_db = -9.0
+
+[node name="HurtSound" type="AudioStreamPlayer" parent="Player _ CharacterBody3D" unique_id=1479820865]
+stream = ExtResource("8_hurt")
+volume_db = -7.0
+
+[node name="FloorBorder" parent="." unique_id=1795844686 instance=ExtResource("2_floor_border")]
+
+[node name="CharacterVisual" type="Node3D" parent="Player _ CharacterBody3D"]
+position = Vector3(0, -1, 0)
+script = ExtResource("9_survivor_visual")
+
+[node name="Model" parent="Player _ CharacterBody3D/CharacterVisual" instance=ExtResource("10_survivor")]
+rotation = Vector3(0, 3.14159265, 0)
+
+[node name="ApocalypticCity" parent="." instance=ExtResource("11_city")]

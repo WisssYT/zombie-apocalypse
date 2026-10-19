@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://c44wgjsnnjpdj"]
+
+[ext_resource type="Script" uid="uid://bdyxuxr2bcgdc" path="res://bullet_character_body_3d.gd" id="1_v7oki"]
+
+[sub_resource type="StandardMaterial3D" id="YellowBullet"]
+shading_mode = 0
+albedo_color = Color(1, 0.88, 0.08, 1)
+
+[sub_resource type="StandardMaterial3D" id="TrailMaterial"]
+shading_mode = 0
+transparency = 1
+albedo_color = Color(1, 0.6, 0.04, 0.5)
+
+[sub_resource type="BoxMesh" id="TrailMesh"]
+material = SubResource("TrailMaterial")
+size = Vector3(0.065, 0.065, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_c2xan"]
+material = SubResource("YellowBullet")
+radius = 0.06
+height = 0.12
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_j2g68"]
+radius = 0.06
+
+[node name="Bullet_CharacterBody3D" type="CharacterBody3D" unique_id=1857138549]
+motion_mode = 1
+collision_layer = 0
+script = ExtResource("1_v7oki")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1936856528]
+mesh = SubResource("SphereMesh_c2xan")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1154433184]
+shape = SubResource("SphereShape3D_j2g68")
+
+[node name="Trail" type="MeshInstance3D" parent="."]
+visible = false
+cast_shadow = 0
+mesh = SubResource("TrailMesh")

@@ -1,0 +1,14 @@
+PSX HORROR MONSTERS - FREE SAMPLER - LICENSE
+Copyright (c) 2026 bitkiln (https://bitkiln.itch.io)
+
+You MAY:
+- use these assets in unlimited personal and commercial projects (games, prototypes, game jams, videos)
+- edit, recolor, re-rig, re-animate, cut and combine them with other assets
+- use them in projects released on any platform
+
+You MAY NOT:
+- resell or redistribute the assets themselves (as is or modified) as an asset pack, template, model or
+  texture collection, or include them in any other asset product
+- claim the original artwork as your own work
+
+Credit is appreciated but not required: "Art by bitkiln".
