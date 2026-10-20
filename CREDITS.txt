@@ -23,3 +23,13 @@ CC0 / Public Domain. Original license: models/apocalyptic_city/LICENSE.txt
 Textures from cc0textures.com, included in the original pack.
 Changes: converted FBX to GLB, reduced embedded textures to 256px,
 trimmed one building below its roof for the existing arena; scaled and placed towers.
+
+WEAPONS
+Modern Weapons PS1 Style ("You see Ivan" pack) by Ace Spectre
+https://ace-spectre.itch.io/modern-weapons-ps1-style
+Models: CC0 / Public Domain ("feel free to use however you like (under CC0 License)").
+Textures: from texturer.com per the author; terms at http://texturer.com/terms/
+(a commenter on the itch.io page reports texturer.com is no longer a texture site,
+so those terms were not checked when this was added).
+Changes: imported weapon pack.fbx and its textures only; the AK-74 is the player rifle,
+rotated and scaled to the old rifle's size. The pistol's texture is missing from the original pack.
