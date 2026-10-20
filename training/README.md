@@ -1,15 +1,10 @@
-# Single-instance reinforcement-learning pipeline
+# Reinforcement-learning pipeline
 
-Status: Godot/Python connection, controls, observations, rewards and round resets.
-No successful survival agent has been trained. Main training is intended for
-Colab/Kaggle; the local commands below are integration checks and optional previews.
+Training runs on **Kaggle or Colab** with `zombie_training.ipynb`. Every game played
+during training is recorded, and the Godot viewer replays any of them next to the
+network that played it. The viewing PC needs only Godot: no Python, torch or GPU.
 
-Validated on Windows with Godot 4.6.2 and Python 3.12: environment checker,
-movement/aim/fire, reload/dash rules, death vs timeout, seeded reset, SB3 automatic
-reset/terminal observations, and untrained network creation/save/load. Linux cloud
-execution is not yet tested. A separate replay integration test performs only
-128 decisions and four tiny PPO updates. This is a wiring check, not a survival
-experiment or a trained game-playing agent.
+No successful survival agent has been trained yet. Local runs are wiring checks only.
 
 ## Files
 
@@ -18,46 +13,45 @@ experiment or a trained game-playing agent.
 - `zombie_rl_controller.gd`: 586 observations, seven action values, reward and endings.
 - `training_sync.gd`: small subclass of the vendored Godot RL Agents Sync.
 - `zombie_env.py`: Gymnasium adapter for one Godot process on Windows/Linux.
-- `smoke_test.py`: exercises the live game connection and resets.
-- `train.py`: PPO training/checkpoint/resume entry point.
-- `recording.py`: compressed episode records and per-rollout inference weights.
-- `replay_data.py`: checksum verification and actual actor/critic reconstruction.
-- `replay_game.py`, `replay.tscn`, `replay_player.gd`, `brain_view.gd`: native Godot
-  gameplay and neuron viewer. No HTML, browser, web server or video required.
+- `train.py`: PPO training, checkpoints, resume, time budget.
+- `zombie_training.ipynb`: the Kaggle/Colab notebook (setup, checks, training, progress plot).
+- `recording.py`: writes every episode and one weight snapshot per PPO rollout.
+- `replay_format.py`: numpy-only reader and forward pass, used by tests and the notebook.
+- `replay.tscn`, `replay_player.gd`: the viewer. `replay_archive.gd` reads recordings and
+  reruns the network; `brain_view.gd`, `inputs_view.gd`, `timeline_view.gd` and
+  `progress_view.gd` draw its panels.
 - `replay_capture.gd`: read-only samples of models, animations and ragdoll bones.
-- `smoke_test_replays.py`: validates recordings across policy updates and resets.
+- `smoke_test.py`, `smoke_test_replays.py`: connection and recording/playback checks.
 
 The numerical observation schema is unchanged: see `../AI_OBSERVATIONS.md`.
-The normal playable `game.tscn`, enemy controller and ragdoll script are unchanged.
-No F2 switch, in-game console or neural auto-aim has been added.
 
-## Runtime
+## Training on Kaggle or Colab
 
-Use Python 3.12 and install in a virtual environment. On Windows:
+Upload or open `training/zombie_training.ipynb` and follow the steps at its top: turn
+internet on (Kaggle), add a `GITHUB_TOKEN` secret so it can clone this private repo,
+and run all cells. It downloads Godot 4.6.3 for Linux, installs the pinned packages
+in their own environment, runs the two wiring checks, then trains headless.
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r training\requirements.txt
-.\.venv\Scripts\python.exe training\smoke_test.py
-```
+- Kaggle: use **Save Version → Save & Run All** for long runs; output stays in
+  `/kaggle/working/runs`. To continue later, attach the previous version as an input;
+  its `runs` folder is copied in and training resumes from the newest checkpoint.
+- Colab: recordings are written directly to `MyDrive/zombie-apocalypse-runs`.
+- `--hours` stops and saves cleanly before the session limit (default 11 h in the notebook).
 
-These commands are run from the Godot project folder. The Python adapter launches
-and closes Godot itself. Do not start `training.tscn` separately at the same time.
-The first launch imports assets if necessary; run the import command below first
-on a fresh machine. The Godot executable defaults to the existing Windows path;
-override it with `--godot "FULL_PATH"` or the `GODOT_BIN` environment variable.
-
-On Linux (including a notebook runtime), the same source project can run with a
-Godot 4.6.2 Linux executable. No graphical editor interaction is needed:
+Run locally only to check wiring (Linux example; `.venv` is ignored by git):
 
 ```bash
-/path/to/godot --headless --path /path/to/project --editor --import --quit
-/path/to/python /path/to/project/training/smoke_test.py --godot /path/to/godot
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python .venv/bin/python -r training/requirements.txt
+godot --headless --path . --editor --import --quit
+.venv/bin/python training/smoke_test.py
+.venv/bin/python training/smoke_test_replays.py
 ```
 
-The cloud notebook and export/upload packaging are the next step. A notebook runtime
-has not been configured or tested yet. Keep all game physics active in training;
-headless mode disables rendering, not enemy collisions or ragdolls.
+The Godot executable defaults to `godot` on PATH (Linux) or the Windows path in
+`zombie_env.py`; override with `--godot` or `GODOT_BIN`. Headless mode disables
+rendering, not enemy collisions or ragdolls.
 
 ## Actions
 
@@ -117,132 +111,91 @@ therefore uses its transport with an explicit Gymnasium adapter. This ensures PP
 can bootstrap timeouts correctly and SB3 can preserve `terminal_observation`.
 The upstream addon itself is vendored unchanged.
 
-## Training and checkpoints (after the connection checks)
+## Training and checkpoints
 
-```powershell
-.\.venv\Scripts\python.exe training\train.py --steps 100000
+```bash
+python training/train.py --steps 2000000 --hours 11 --resume latest --output runs/ppo
 ```
 
-For Linux/notebooks, use the notebook's Python executable and pass `--godot`.
-Start with CPU for this small numerical policy. The network has two 128-unit
-layers for the actor and two 128-unit layers for the critic. This Gymnasium
-adapter returns a flat array, so it uses `MlpPolicy`.
+- `--resume latest` picks the newest checkpoint or `survivor.zip` in `--output`
+  (starts fresh if there is none). `--steps` counts additional decisions.
+- `--n-steps` (default 2048) is the PPO rollout length. One weight snapshot is
+  recorded per rollout, so this also sets how many snapshots are stored.
+- Checkpoints every 10,000 decisions in `checkpoints/`, `survivor.zip` at the end,
+  Monitor CSVs per session, and the recordings in `replays/`.
+- Two 128-unit Tanh layers for the actor and two for the critic, `MlpPolicy`, CPU.
 
-Outputs go to ignored `training/runs/ppo/`: episode CSV, checkpoints every 10,000
-decisions, state/brain replay archives, and `survivor.zip` after a completed run. Preserve these outside an
-ephemeral cloud runtime. To resume:
+Do not claim survival performance from a short run. Judge it from the progress
+screen or the notebook's plot across many games.
 
-```powershell
-.\.venv\Scripts\python.exe training\train.py --resume training\runs\ppo\survivor.zip --steps 100000
+## Watching recorded games
+
+![Replay with the policy network](../docs/screenshots/replay_policy.png)
+
+These screenshots come from untrained wiring-check recordings, not a trained survivor.
+The value network view and the progress screen:
+
+![Replay with the value network](../docs/screenshots/replay_value.png)
+![Training progress screen](../docs/screenshots/replay_progress.png)
+
+Copy the downloaded `ppo` folder into `training/runs/` (or anywhere), open
+`training/replay.tscn` in the editor and press **F6**. The viewer opens the last game
+you watched, or the newest one. **All games** (or Tab) shows every recorded game in
+training order: survival time, kills or reward against training steps, with a
+rolling average. Click a dot to watch that game. **Open folder…** picks another
+download location; the choice is remembered.
+
+The game view uses the original rooftop, city, characters and gun, seen from the
+same overhead camera, with the same HUD as the game. Bottom left shows what the
+network pressed, drawn as the controls a player would use (ZQSD, Space, R, the
+mouse button and the aim direction). Movement is analog, so the stick shows the
+exact vector and the keys light up in proportion.
+
+The right panel shows the network at the current decision:
+
+- **What it sees**: the 586 inputs as rows, the survivor first and then the 18
+  enemy slots, nearest first. Hover a square for its name and value; hovering a
+  row circles that enemy (or you) in the game view.
+- **Layer 1 / Layer 2**: the 128 neurons of each hidden layer.
+- **Decision**: the action means, and the value after sampling/clipping that was
+  actually sent to the game. The **Value** tab shows the critic instead.
+- Lines are the strongest contributions (input × weight) at that moment. Click a
+  neuron to see everything feeding it and where it sends its signal.
+
+Orange is positive, blue negative, brighter is stronger. The timeline shows health,
+the critic's value estimate and kills; click or drag to seek.
+
+Keys: Space play/pause, Left/Right one decision (Shift: one second), Home/End,
+Page Up/Page Down previous/next game, 1/2 policy/value, Tab all games.
+
+The viewer recomputes every activation in GDScript from the weights that made
+that decision. If they don't reproduce the value/log-probability recorded live,
+the panel says so. Headless check of a recording:
+
+```bash
+godot --headless --path . res://training/replay.tscn -- --run=/path/to/runs --check
 ```
 
-Add `--show` for a local window during checks. This is optional; cloud training
-should normally stay headless. It may be slower than headless execution.
+### What is stored
 
-Do not claim survival performance from a short smoke run. Evaluate saved models
-on new seeds and report actual survival/kills before scaling instance count.
+One folder per training session under `replays/`, so resumed runs never overwrite:
 
-## Watch every episode and inspect its actual brain
+- `manifest.json`: format 2, observation schema, the weight layout.
+- `policies.json` and `policies/<sha256>.bin`: raw float32 weights, input-major,
+  saved once before each PPO rollout and checked against their hash when loaded.
+- `episodes/<id>.bin.gz`: float32 observations (T+1), applied and sampled actions,
+  rewards, live values and log-probabilities.
+- `episodes/<id>.json.gz`: world samples (T+1), status, seed, training step range
+  and which weight snapshot made each decision.
+- `index.json`: one summary row per game for the progress screen.
 
-Normal training records **every episode by default**, without rendering images.
-Use `--no-replays` only if you deliberately want to disable this. Each training
-invocation creates a new archive under `OUTPUT/replays/TIMESTAMP-ID/`, so resuming
-training does not overwrite previous episodes.
-
-After downloading the complete archive from Colab/Kaggle, watch it on your PC:
-
-```powershell
-.\.venv\Scripts\python.exe training\replay_game.py --run training\runs\ppo
-```
-
-That command selects the latest archive in the output folder and its last saved
-episode. Or pass the exact `replays/TIMESTAMP-ID` folder to open an older archive.
-The window is **Godot itself**, using the original rooftop, city, characters and
-gun. The game code does not run during playback: recorded transforms, animation
-positions and ragdoll bone poses drive the models directly.
-
-In the viewer:
-
-- Choose an episode with the dropdown. Python prepares that episode's neural
-  data in the background; allow a few seconds for loading.
-- Space or the Play button pauses/resumes. Left/right arrows and the Step buttons
-  move by one recorded decision. Drag the slider to seek. Speed ranges from 0.25x
-  to 4x. The final scene has no further decision and therefore no neuron display.
-- Switch between **actor** (action selection) and **critic** (future reward estimate).
-- All 586 input values and both 128-neuron hidden layers are shown. Amber is
-  positive, blue is negative, and brightness indicates magnitude.
-- Click a hidden/output neuron to show its incoming weight connections, bias and
-  strongest input contributions. Hover over a neuron/input for its numerical value.
-- Action bars show the actual commands sent to Godot. The network's action means
-  appear at the output neurons; PPO samples actions around these means before
-  clipping them to [-1, 1]. The actual samples are recorded too.
-- The integrity panel compares reconstructed value/log-probability with their
-  **live inference values** recorded at the time. A mismatch is displayed clearly.
-
-To list or select an episode from the command line:
-
-```powershell
-.\.venv\Scripts\python.exe training\replay_game.py --run training\runs\ppo --list
-.\.venv\Scripts\python.exe training\replay_game.py --run training\runs\ppo --episode episode-000003
-```
-
-For an immediate **untrained** preview using the local viewer-test recording:
-
-```powershell
-.\.venv\Scripts\python.exe training\replay_game.py --run training\runs\viewer-demo --episode episode-000000
-```
-
-That ignored local demo is labelled `UNTRAINED NETWORK / VIEWER TEST`. Its initial
-output biases were set in an external test fixture to keep the player on the roof
-long enough to test enemy recording. It is not a learned survival strategy and
-those fixture settings are not used by `train.py`. The demo is not committed.
-
-### Precision and storage
-
-- `.npz`: losslessly compressed float32 observations (T+1), applied actions, raw
-  sampled actions, rewards, live values/log-probabilities, termination flags and
-  **a policy ID for each individual decision**.
-- `.json.gz`: compressed actual world samples (T+1), episode status/results and
-  visual poses. Persistent visual IDs survive enemies switching into ragdolls.
-- `policies/SHA256.pt`: the real inference weights, saved once before each PPO
-  rollout, shared across every decision using them. We verify the file checksum
-  before loading. These weights include actor, critic and action randomness scale.
-  They are not substitutes for full optimizer/resume checkpoints.
-- `index.json`: survival time, kills, health, reward, status and episode bytes.
-- `manifest.json`: format, observation schema and Python/library versions.
-
-PPO updates after collecting a rollout. A single episode can cross several
-updates; its decisions therefore may refer to different weight snapshots. No
-"nearest checkpoint" approximation is used. Activations are computed from each
-recorded observation and its matching weights when opening a replay, rather than
-being stored at every training step. Neuron meanings are not invented labels.
-
-Full episodes are saved at termination/timeout. A partial episode is also saved
-after each rollout and on normal close, with `in_progress`/`interrupted` status.
-A hard runtime crash can lose decisions since the last completed rollout.
-
-Samples are at 15 decisions/s, **not every rendered/physics frame**. Fast events
-between samples can be missed, and playback currently has no audio or transient
-muzzle flashes. Ragdoll bones are captured read-only at that same sampling rate;
-their physics is not rerun or changed. This reproduces sampled state, rather than
-claiming a pixel-perfect video. Keep the matching project/assets for visual playback.
-
-Recording uses CPU, bandwidth between local Godot/Python processes, and storage;
-it is not free. The 20.2-second local demo used about 0.37 MB of compressed episode
-data, plus one roughly 0.74 MB weight snapshot. Actual sizes grow with enemies,
-ragdolls, episode length and number of updates. Check real archive sizes before
-scaling workers. Download the **whole archive including policies**, not just NPZs.
-Temporary expanded data is created only for local viewing and removed on exit.
-
-Run the replay integration check:
-
-```powershell
-.\.venv\Scripts\python.exe training\smoke_test_replays.py
-```
-
-It checks actual sampled/clipped actions, actor/critic inference equality, policy
-changes within an episode, auto-reset separation, partial saves, checksum rejection,
-and native Godot model playback. Cloud execution is still untested.
+Games are saved when they end, and partly after each rollout (`in_progress`, then
+`interrupted` if the session stops). A hard crash can lose decisions since the last
+rollout. Samples are at 15 decisions/s; playback interpolates between them, but
+events shorter than a sample can be missed and there is no audio or muzzle flash.
+A 20 s game is about 0.4 MB, a weight snapshot about 0.74 MB. Keep the matching
+project/assets for playback, and always download the whole folder including
+`policies/`.
 
 ## Diagnostics
 
@@ -254,8 +207,8 @@ and native Godot model playback. Cloud execution is still untested.
 - The addon contains optional C# ONNX inference files, but this pipeline uses
   Python inference/training and does not instantiate them. The standard Godot
   executable is used for the checks; no .NET installation is required here.
-- Only one instance is supported by this first adapter. Parallel workers,
-  throughput benchmarking and a cloud notebook are subsequent work.
+- Only one instance is supported by this first adapter. Parallel workers and
+  throughput benchmarking are subsequent work.
 
 ## Third-party component
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import subprocess
 
@@ -20,6 +21,7 @@ OBSERVATION_SIZE = 586
 DEFAULT_GODOT = (
     r"C:\Users\user\Downloads\Godot_v4.6.2-stable_win64.exe"
     r"\Godot_v4.6.2-stable_win64_console.exe"
+    if os.name == "nt" else shutil.which("godot") or "godot"
 )
 
 

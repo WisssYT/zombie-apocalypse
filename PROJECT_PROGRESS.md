@@ -7,19 +7,18 @@ Updated: 2026-10-20
 The game is playable. We have added controls that code can drive and a numerical
 description of the game for a future reinforcement-learning agent.
 
-**A single-instance Python training connection is now implemented.** The separate
-`training.tscn` and `training/` scripts provide actions, observations, initial rewards
-and resets. `training/train.py` can create PPO's neural networks. No successful
-survival policy has been trained, and no Colab/Kaggle session has been run yet.
+**A single-instance Python training connection is implemented, and runs on Linux.**
+The separate `training.tscn` and `training/` scripts provide actions, observations,
+initial rewards and resets. Training is meant to run on Kaggle/Colab with
+`training/zombie_training.ipynb`; no long training session has been run yet.
 See [training/README.md](training/README.md) for commands and the current pipeline.
-The pipeline now records compressed state/brain replays for every episode by
-default. A **native Godot viewer** shows original gameplay assets beside actual
-actor/critic neuron activations and selectable incoming weights. It uses each
-decision's matching weight snapshot, verified against live inference values.
-There is no HTML viewer or video recording. Full controls and limitations are in
-the training README. A tiny 128-decision integration test included four PPO
-updates; this does not establish survival skill. The labelled local viewer demo
-uses an untrained network and test-only initial output biases.
+
+Every training game is recorded with the weight snapshot that played it. The
+viewer (`training/replay.tscn`, F6) replays any game with the original assets and
+shows the network beside it: the inputs it saw, both hidden layers, its decision,
+and the controls it pressed. A progress screen plots every recorded game against
+training steps. The viewer recomputes the network in GDScript, so watching needs
+only Godot on the PC. Only untrained wiring-check recordings exist so far.
 Checking **Ai Controlled** selects the code-controlled inputs. It does not create
 an intelligent player: without commands, the player stays still and does not shoot.
 
@@ -192,8 +191,8 @@ References:
    timeouts, final observations and SB3 auto-reset passed. Network creation and
    save/load were checked without learning a policy. Each action advances four
    60 Hz ticks. Re-run `training/smoke_test.py` after pipeline changes.
-2. Prepare a Linux package and Colab/Kaggle notebook, then repeat the checks there.
-   The main training destination remains the cloud; local runs are integration tests.
+2. Run `training/zombie_training.ipynb` on Kaggle/Colab. The connection and replay
+   checks pass on Linux (Godot 4.6.3) locally; the notebook itself is untested in the cloud.
 3. Run a short PPO experiment in the notebook. Initial reward is +0.05 per second,
    +2 per kill, -0.02 per health point lost and -2 on death. Separate hit/damage-dealt
    rewards and collision telemetry are not implemented. Tune using actual behavior.

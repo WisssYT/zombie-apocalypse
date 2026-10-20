@@ -1,7 +1,7 @@
-"""Small local integration check, not a survival-training experiment."""
+"""Small integration check of recording + Godot playback, not a training experiment."""
 import argparse
+from pathlib import Path
 import subprocess
-import sys
 
 import numpy as np
 from stable_baselines3 import PPO
@@ -9,92 +9,75 @@ from stable_baselines3.common.monitor import Monitor
 import torch
 
 from recording import EpisodeRecorder, ReplayCallback
-from replay_data import ReplayStore
+from replay_format import forward, load_episode, load_policy, log_prob
 from zombie_env import ZombieEnv, PROJECT
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--godot")
+    parser.add_argument("--steps", type=int, default=128)
+    parser.add_argument("--episode-seconds", type=float, default=6)
+    parser.add_argument("--output", type=Path, default=PROJECT / "training/runs/replay-smoke")
     args = parser.parse_args()
     torch.set_num_threads(1)
-    game = ZombieEnv(godot=args.godot, episode_seconds=6)
+    game = ZombieEnv(godot=args.godot, episode_seconds=args.episode_seconds)
     godot = game.godot
-    recorder = EpisodeRecorder(game, PROJECT / "training/runs/replay-smoke",
-                               label="PIPELINE CHECK / NOT A TRAINED SURVIVOR")
+    recorder = EpisodeRecorder(game, args.output, label="Pipeline check, untrained")
     env = Monitor(recorder)
     try:
         model = PPO("MlpPolicy", env, seed=12, device="cpu", verbose=0,
                     n_steps=32, batch_size=32, n_epochs=1,
                     policy_kwargs=dict(net_arch=dict(pi=[128, 128], vf=[128, 128])))
-        # Four short collection/update cycles exercise a round crossing updates.
-        model.learn(128, callback=ReplayCallback(recorder))
+        # Several short collection/update cycles make a round cross updates.
+        model.learn(args.steps, callback=ReplayCallback(recorder))
     finally:
         env.close()
-    store = ReplayStore(recorder.directory)
-    entries = store.index()
-    assert any(entry["status"] == "complete" for entry in entries)
-    assert any(entry["status"] == "interrupted" for entry in entries)
-    count = 0
+    session = recorder.directory
+    import json
+    entries = json.loads((session / "index.json").read_text())
+    statuses = {entry["status"] for entry in entries}
+    assert statuses & {"died", "timeout"} and "interrupted" in statuses, statuses
+    decisions = 0
     for entry in entries:
-        arrays, metadata = store.episode(entry["id"])
-        steps = len(arrays["actions"])
+        arrays, metadata = load_episode(session, entry["id"])
+        steps = metadata["steps"]
         assert arrays["observations"].shape == (steps + 1, 586)
-        assert len(metadata["frames"]) == steps + 1
         np.testing.assert_array_equal(np.clip(arrays["raw_actions"], -1, 1), arrays["actions"])
         for step in range(steps):
-            result = store.frame(entry["id"], step)
-            assert result["verified"], result
-            assert len(result["activations"]["actor"]) == 2
-            assert len(result["activations"]["critic"][0]) == 128
-            assert len(result["observation"]) == 586
-            count += 1
-        if entry["status"] == "complete":
-            assert arrays["terminated"][-1] or arrays["truncated"][-1]
-            assert len(set(arrays["policy_ids"])) > 1
-        temporary = recorder.directory / "check-playback.json"
-        store.export_episode(entry["id"], temporary)
-        try:
-            command = [godot, "--headless", "--path", str(PROJECT),
-                       "res://training/replay.tscn", "--", f"--replay-file={temporary}", "--replay-check"]
-            result = subprocess.run(command, capture_output=True, text=True, timeout=60)
-            assert result.returncode == 0 and "REPLAY_CHECK_OK" in result.stdout, result.stdout + result.stderr
-            assert "SCRIPT ERROR" not in result.stderr and "ERROR:" not in result.stderr, result.stderr
-        finally:
-            temporary.unlink(missing_ok=True)
-    weights = store.weights(str(arrays["policy_ids"][0]), "actor", 0, 0)
-    assert len(weights["weights"]) == 586
-    temporary = recorder.directory / "check-switch.json"
+            net = forward(load_policy(session, arrays["policy_ids"][step]), arrays["observations"][step])
+            assert abs(net["value"] - arrays["values"][step]) < 1e-4
+            assert abs(log_prob(net["mean"], net["std"], arrays["raw_actions"][step])
+                       - arrays["log_probs"][step]) < 1e-3
+            decisions += 1
+        if entry["status"] != "interrupted":
+            assert len(metadata["policy_runs"]) > 1, "expected a round crossing a PPO update"
+    policy_id = arrays["policy_ids"][0]
+    path = session / "policies" / f"{policy_id}.bin"
+    original = path.read_bytes()
     try:
-        store.export_episode(entries[0]["id"], temporary)
-        result = subprocess.run([
-            godot, "--headless", "--path", str(PROJECT), "res://training/replay.tscn", "--",
-            f"--replay-file={temporary}", f"--python-bin={sys.executable}",
-            f"--archive-path={recorder.directory}", "--replay-switch-check"],
-            capture_output=True, text=True, timeout=60)
-        assert result.returncode == 0 and "EPISODE_SWITCH_OK" in result.stdout, result.stdout + result.stderr
-        assert "ERROR:" not in result.stderr, result.stderr
-    finally:
-        temporary.unlink(missing_ok=True)
-    # A changed checkpoint is rejected, rather than quietly showing another brain.
-    policy_id = str(arrays["policy_ids"][0])
-    policy_path = recorder.directory / "policies" / f"{policy_id}.pt"
-    original = policy_path.read_bytes()
-    try:
-        policy_path.write_bytes(original + b"corruption")
-        store.policies.clear()
+        path.write_bytes(original + b"\0\0\0\0")
         try:
-            store.policy(policy_id)
+            load_policy(session, policy_id)
         except ValueError as error:
             assert "checksum" in str(error)
         else:
             raise AssertionError("Corrupted weights were accepted")
     finally:
-        policy_path.write_bytes(original)
-    bytes_total = sum(path.stat().st_size for path in recorder.directory.rglob("*") if path.is_file())
-    print(f"PASS: {count} actual decisions, exact actor/critic inference and sampled actions")
-    print("PASS: complete/partial rounds, policy changes within a round, checksum rejection, Godot model playback")
-    print(f"Replay archive: {recorder.directory}\nTotal archive bytes (including weights): {bytes_total}")
+        path.write_bytes(original)
+    result = subprocess.run(
+        [godot, "--headless", "--path", str(PROJECT), "res://training/replay.tscn", "--",
+         f"--run={session}", "--check"], capture_output=True, text=True, timeout=300)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0 and "REPLAY_CHECK_OK" in result.stdout, output
+    # Headless Godot's dummy renderer reports this when models are freed; real rendering doesn't.
+    errors = [line for line in output.splitlines() if "ERROR" in line
+              and 'Parameter "material" is null' not in line]
+    assert not errors, output
+    total = sum(p.stat().st_size for p in session.rglob("*") if p.is_file())
+    print(f"PASS: {decisions} decisions reproduced from saved weights (numpy)")
+    print("PASS: " + result.stdout.strip().splitlines()[-1])
+    print(f"Archive {session}: {len(entries)} episodes, {total / 1e6:.2f} MB")
 
 
 if __name__ == "__main__":
