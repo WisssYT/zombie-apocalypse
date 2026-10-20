@@ -59,7 +59,9 @@ an intelligent player: without commands, the player stays still and does not sho
 - Dash has a committed direction and cooldown, gives no invulnerability and blocks
   shooting. Starting a dash cancels an unfinished reload.
 - Zombies have momentum and limited turning. Sharp turns can cause skids/falls.
-- Hounds warn, commit to a straight charge, then recover. Every fourth spawned
+- Hounds warn, commit to a straight charge, then recover. A charge that runs into
+  the player now hits (it used to stop 1.45 m away, outside its 1.35 m reach, and do
+  no damage head-on). Every fourth spawned
   enemy is a hound; the normal spawning cap is 18 living enemies.
 - Charging hounds can knock zombies down; zombie collisions can also cause falls.
 
@@ -200,9 +202,9 @@ References:
    knockdowns, trips, falls off the building; counted, not rewarded), noise-free
    evaluation (`training/evaluate.py`, also run by the notebook), visible exploration
    noise per attempt, and replay-to-video (SAVE VIDEO in the viewer, Godot Movie Maker).
-4. Run a short PPO experiment in the notebook. Initial reward is +0.05 per second,
-   +2 per kill, -0.02 per health point lost and -2 on death. Separate hit/damage-dealt
-   rewards are not implemented; collisions/falls are counted but not rewarded.
+4. Run a short PPO experiment in the notebook. The reward favours survival and
+   dodging: +0.1 per second, -0.05 per health point lost, -3 on death, +0.5 per kill,
+   +0.5 per dodged hound charge (weights adjustable); collisions/falls are counted only.
    Tune using actual behavior seen in replays and noise-free evaluations.
 5. Track damage and ammo use as well; save/resume and evaluation already exist.
 6. Benchmark 1, 2, 4, 8 and more instances before choosing a count. Only one process

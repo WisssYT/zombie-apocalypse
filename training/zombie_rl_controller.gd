@@ -10,9 +10,21 @@ var truncated := false
 var terminal_observation: Array[float] = []
 var previous_health := 100.0
 var previous_kills := 0
+var previous_dodges := 0
 var episode_return := 0.0
+# Reward weights, survival and dodging first. Python always passes every weight
+# (--reward_<name>=x, see DEFAULT_REWARD in zombie_env.py); these defaults only
+# apply if training.tscn is started by hand.
+var reward_weights := {"alive": 0.1, "damage": -0.05, "death": -3.0, "kill": 0.5, "dodge": 0.5}
 var replay_enabled := false
 const REPLAY_CAPTURE = preload("res://training/replay_capture.gd")
+
+func _ready() -> void:
+	super._ready()
+	for argument in OS.get_cmdline_args():
+		for key in reward_weights:
+			if argument.begins_with("--reward_%s=" % key):
+				reward_weights[key] = argument.get_slice("=", 1).to_float()
 
 func enable_replay() -> bool:
 	replay_enabled = true
@@ -35,6 +47,7 @@ func bind_episode(world: Node3D, player: Node3D, time_limit: float) -> void:
 	terminal_observation.clear()
 	previous_health = _player.health
 	previous_kills = game.kills
+	previous_dodges = game.stats.charge_dodged
 
 func _physics_process(delta: float) -> void:
 	# Overrides the addon's generic step limit; use simulation seconds instead.
@@ -44,14 +57,16 @@ func _physics_process(delta: float) -> void:
 	elapsed += delta
 	var damage_taken: float = maxf(0.0, previous_health - _player.health)
 	var new_kills: int = maxi(0, game.kills - previous_kills)
-	# Initial reward, to be tuned after observing learned behavior.
-	var step_reward := 0.05 * delta + 2.0 * new_kills - 0.02 * damage_taken
+	var new_dodges: int = maxi(0, game.stats.charge_dodged - previous_dodges)
+	var w := reward_weights
+	var step_reward: float = w.alive * delta + w.damage * damage_taken + w.kill * new_kills + w.dodge * new_dodges
 	previous_health = _player.health
 	previous_kills = game.kills
+	previous_dodges = game.stats.charge_dodged
 	terminated = _player.dead
 	truncated = not terminated and elapsed + 0.000001 >= episode_limit
 	if terminated:
-		step_reward -= 2.0
+		step_reward += w.death
 	reward += step_reward
 	episode_return += step_reward
 	if terminated or truncated:
@@ -98,6 +113,7 @@ func get_info() -> Dictionary:
 		"episode_return": episode_return, "episode_index": get_parent().episode_index,
 		"collisions": game.stats.collision, "hound_knockdowns": game.stats.hound_knockdown,
 		"tripped": game.stats.tripped, "fell_off": game.stats.fell_off,
+		"charges_dodged": game.stats.charge_dodged,
 		"position": [_player.position.x, _player.position.y, _player.position.z]
 	}
 	if replay_enabled:

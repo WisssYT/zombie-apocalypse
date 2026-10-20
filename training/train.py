@@ -7,7 +7,7 @@ import time
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
-from zombie_env import ZombieEnv
+from zombie_env import ZombieEnv, parse_reward
 from recording import EpisodeRecorder, ReplayCallback
 
 
@@ -37,6 +37,8 @@ def main():
                         help="Decisions per PPO rollout; one weight snapshot is recorded per rollout")
     parser.add_argument("--noise", type=float, default=1.0,
                         help="Starting exploration noise (action std); PPO then learns its own")
+    parser.add_argument("--reward", action="append", metavar="NAME=VALUE",
+                        help="Change a reward weight, e.g. --reward kill=0 (see DEFAULT_REWARD)")
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--no-replays", action="store_true", help="Disable episode recording")
     parser.add_argument("--resume", help="A model .zip, or 'latest' for the newest one in --output")
@@ -44,12 +46,14 @@ def main():
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     resume = latest_model(args.output) if args.resume == "latest" else args.resume
+    reward = parse_reward(args.reward)
+    print("Reward weights:", reward)
     game = ZombieEnv(godot=args.godot, show_window=args.show,
-                     episode_seconds=args.episode_seconds)
+                     episode_seconds=args.episode_seconds, reward=reward)
     recorder = None if args.no_replays else EpisodeRecorder(game, args.output)
     env = Monitor(recorder if recorder is not None else game,
                   str(args.output / f"episodes-{int(time.time())}"),
-                  info_keywords=("kills", "collisions", "hound_knockdowns", "tripped", "fell_off"))
+                  info_keywords=("kills", "charges_dodged", "collisions", "hound_knockdowns", "tripped", "fell_off"))
     try:
         if resume:
             print(f"Resuming from {resume}")

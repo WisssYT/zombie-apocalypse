@@ -9,7 +9,9 @@ def main():
     parser.add_argument("--godot")
     parser.add_argument("--show", action="store_true")
     args = parser.parse_args()
-    env = ZombieEnv(godot=args.godot, show_window=args.show, episode_seconds=2)
+    # A non-default survival weight proves the reward settings reach Godot.
+    env = ZombieEnv(godot=args.godot, show_window=args.show, episode_seconds=2,
+                    reward={"alive": 0.3})
     try:
         obs, _ = env.reset(seed=1)
         assert obs.shape == (590,) and env.observation_space.contains(obs)
@@ -18,8 +20,11 @@ def main():
         start_x = obs[5]
         action = np.array([1, 0, 1, 0, 1, -1, -1], np.float32)
         for _ in range(3):
-            obs, _, terminated, truncated, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step(action)
             assert not terminated and not truncated
+            # Nothing reaches the player this early: only the survival reward, 0.3/s * 4/60 s.
+            assert abs(reward - 0.3 * 4 / 60) < 1e-5, reward
+        print("PASS: reward weights from Python are the ones Godot uses")
         assert obs[5] > start_x and info["ammo"] < 12
         print("PASS: Python movement/mouse/shoot commands affect the game")
         action[:] = [0, 0, 1, 0, -1, 1, -1]

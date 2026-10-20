@@ -64,12 +64,15 @@ func _draw() -> void:
 	draw_rect(track, Style.ZERO)
 	var last := frames.size() - 1
 	draw_rect(Rect2(track.position, Vector2(_x(head) - track.position.x, track.size.y)), Color(Style.TEXT, 0.12))
-	# Gold: a kill. Red: a hit taken. White: zombies collided. Cyan: one fell off.
+	# Gold: a kill. Red: a hit taken. Green: a hound charge dodged.
+	# White: zombies collided. Cyan: one fell off.
 	for i in range(1, frames.size()):
 		var now: Dictionary = frames[i].get("stats", {})
 		var before: Dictionary = frames[i - 1].get("stats", {})
 		if now.get("collision", 0) + now.get("hound_knockdown", 0) > before.get("collision", 0) + before.get("hound_knockdown", 0):
 			draw_rect(Rect2(_x(i) - 1, track.position.y, 2, track.size.y * 0.5), Style.TEXT)
+		if now.get("charge_dodged", 0) > before.get("charge_dodged", 0):
+			draw_rect(Rect2(_x(i) - 1, track.position.y - 3, 2, track.size.y + 6), Style.AHEAD)
 		if now.get("fell_off", 0) > before.get("fell_off", 0):
 			draw_rect(Rect2(_x(i) - 1, track.position.y - 3, 2, track.size.y + 6), Style.OFF)
 		if frames[i].health < frames[i - 1].health:

@@ -14,7 +14,7 @@ import torch
 
 from recording import EpisodeRecorder
 from train import latest_model
-from zombie_env import ZombieEnv
+from zombie_env import ZombieEnv, parse_reward
 
 # Training uses round seeds 1, 2, 3...; evaluation starts far away from them.
 EVALUATION_SEED = 1_000_000
@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--port", type=int, default=11010, help="Differs from training so both can run")
     parser.add_argument("--output", type=Path, default=Path(__file__).parent / "runs/ppo")
     parser.add_argument("--no-replays", action="store_true")
+    parser.add_argument("--reward", action="append", metavar="NAME=VALUE",
+                        help="Same weights as training, so recorded rewards are comparable")
     args = parser.parse_args()
     model_path = latest_model(args.output) if args.model == "latest" else Path(args.model)
     if model_path is None:
@@ -38,7 +40,7 @@ def main():
     model = PPO.load(model_path, device="cpu")
     print(f"Evaluating {model_path} ({model.num_timesteps} training steps), noise off")
     game = ZombieEnv(godot=args.godot, seed=args.seed, port=args.port,
-                     episode_seconds=args.episode_seconds)
+                     episode_seconds=args.episode_seconds, reward=parse_reward(args.reward))
     env = game if args.no_replays else EpisodeRecorder(
         game, args.output, label="Evaluation, no noise", mode="evaluation")
     results = []
@@ -58,6 +60,7 @@ def main():
                 done = terminated or truncated
             results.append(info)
             print(f"game {number + 1}: {info['elapsed']:.1f}s, {info['kills']} kills, "
+                  f"{info['charges_dodged']} charges dodged, "
                   f"{info['collisions']} collisions, {info['fell_off']} fell off, "
                   f"{'died' if info['terminated'] else 'survived'}")
     finally:
@@ -67,6 +70,7 @@ def main():
         print(f"\n{len(results)} games: survived {survived}, "
               f"average {np.mean([r['elapsed'] for r in results]):.1f}s, "
               f"{np.mean([r['kills'] for r in results]):.1f} kills, "
+              f"{np.mean([r['charges_dodged'] for r in results]):.1f} dodged, "
               f"{np.mean([r['collisions'] for r in results]):.1f} collisions, "
               f"{np.mean([r['fell_off'] for r in results]):.1f} fell off")
         if not args.no_replays:

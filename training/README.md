@@ -96,19 +96,23 @@ so Python update time does not give enemies extra simulation time.
 - `reset(seed=...)` reproduces that seed's starting round. Ordinary resets advance
   through the seed sequence. Changing the base seed restarts the Godot process.
 
-Initial reward (not yet tuned):
+Reward, weighted towards surviving and dodging (`DEFAULT_REWARD` in `zombie_env.py`):
 
 ```text
-+0.05 per simulation second
-+2.0 per kill
--0.02 per health point lost
--2.0 on death
+alive   +0.1  per simulated second      (a full 60 s round: +6)
+damage  -0.05 per health point lost     (zombie bite -0.5, hound charge -0.9)
+death   -3.0
+kill    +0.5
+dodge   +0.5  per hound charge dodged
 ```
 
-Damage dealt does not yet have a separate reward. Collisions/knockdowns are not
-directly rewarded, so repeatedly farming falls is not the initial objective.
-These rewards must be evaluated against real learned behavior before treating
-them as final. No resupply has been added; the player still has 60 total rounds.
+A charge counts as dodged when the player moved at least 1 m off the spot the
+hound locked onto and the hound still came within 3 m without hitting, so
+standing still or hiding in the crowd earns nothing. Change any weight with
+`--reward name=value` (train.py and evaluate.py) or `REWARD` in the notebook;
+each recording stores the weights it used. Collisions and falls are counted but
+not rewarded. No resupply has been added; the player still has 60 total rounds.
+Judge these weights from real replays before treating them as final.
 
 The upstream Python wrapper duplicates done into both termination/truncation and
 does not implement the Gymnasium terminal/reset contract we need. `ZombieEnv`

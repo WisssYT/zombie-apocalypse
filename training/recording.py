@@ -103,7 +103,7 @@ class EpisodeRecorder(gym.Wrapper):
         write_json(self.directory / "manifest.json", {
             "format": FORMAT, "session": tag, "label": label,
             # training: actions sampled with exploration noise; evaluation: noise off.
-            "mode": mode,
+            "mode": mode, "reward": env.unwrapped.reward,
             "observation_schema": 3, "observation_size": OBSERVATION_SIZE,
             "action_size": ACTION_SIZE, "decision_hz": 15, "activation": "tanh",
             "policy_layout": [{"name": n, "shape": s} for n, s in POLICY_LAYOUT],
@@ -218,6 +218,7 @@ class EpisodeRecorder(gym.Wrapper):
             "reward": float(sum(episode["rewards"])),
             "collisions": final["stats"]["collision"] + final["stats"]["hound_knockdown"],
             "tripped": final["stats"]["tripped"], "fell_off": final["stats"]["fell_off"],
+            "dodged": final["stats"].get("charge_dodged", 0),
             "timestep": episode["timestep_end"],
             "bytes": sum(target.with_suffix(s).stat().st_size for s in (".bin.gz", ".json.gz")),
         }

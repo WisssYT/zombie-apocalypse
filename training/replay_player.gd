@@ -314,6 +314,7 @@ func apply_frame() -> void:
 	var stats: Dictionary = frame.get("stats", {})
 	run.collisions = stats.get("collision", 0) + stats.get("hound_knockdown", 0)
 	run.fell_off = stats.get("fell_off", 0)
+	run.dodged = stats.get("charge_dodged", 0)
 	run.queue_redraw()
 	brain.head = at
 	brain.queue_redraw()

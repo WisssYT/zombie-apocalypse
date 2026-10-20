@@ -24,9 +24,30 @@ DEFAULT_GODOT = (
     if os.name == "nt" else shutil.which("godot") or "godot"
 )
 
+# Reward, survival and dodging first: staying alive and not getting hit outweigh
+# kills. Godot computes it (zombie_rl_controller.gd) from these weights.
+DEFAULT_REWARD = {
+    "alive": 0.1,     # per simulated second alive
+    "damage": -0.05,  # per health point lost: a zombie hit -0.5, a hound charge -0.9
+    "death": -3.0,
+    "kill": 0.5,
+    "dodge": 0.5,     # per hound charge that ends without hitting the player
+}
+
+
+def parse_reward(items):
+    """['kill=0', 'dodge=1'] from the command line -> full weights dict."""
+    reward = dict(DEFAULT_REWARD)
+    for item in items or []:
+        name, _, value = item.partition("=")
+        if name not in reward or not value:
+            raise ValueError(f"Unknown reward setting {item!r}; use one of {', '.join(reward)}")
+        reward[name] = float(value)
+    return reward
+
 
 class ProjectProcess(GodotEnv):
-    def __init__(self, godot, project, *, seed, port, episode_seconds, show_window, log_path):
+    def __init__(self, godot, project, *, seed, port, episode_seconds, show_window, log_path, reward):
         self.project = Path(project).resolve()
         self.game_log = Path(log_path)
         self.game_log.parent.mkdir(parents=True, exist_ok=True)
@@ -36,7 +57,7 @@ class ProjectProcess(GodotEnv):
             super().__init__(
                 env_path=str(godot), seed=seed, port=port,
                 show_window=show_window, convert_action_space=True,
-                episode_seconds=episode_seconds,
+                episode_seconds=episode_seconds, reward=reward,
             )
         except BaseException:
             self.close()
@@ -54,6 +75,7 @@ class ProjectProcess(GodotEnv):
         cmd = [env_path, "--path", str(self.project), "res://training.tscn",
                f"--port={port}", f"--env_seed={seed}", "--action_repeat=4",
                "--speedup=1", f"--episode_seconds={kwargs['episode_seconds']}"]
+        cmd.extend(f"--reward_{name}={value}" for name, value in kwargs["reward"].items())
         if not show_window:
             cmd.extend(["--headless", "--disable-render-loop", "--fixed-fps", "60"])
         self.proc = subprocess.Popen(
@@ -127,13 +149,14 @@ class ZombieEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 60}
 
     def __init__(self, godot=None, project=PROJECT, *, seed=1, port=11008,
-                 episode_seconds=60, show_window=False, log_path=None):
+                 episode_seconds=60, show_window=False, log_path=None, reward=None):
         super().__init__()
         self.godot = str(godot or os.environ.get("GODOT_BIN", DEFAULT_GODOT))
         self.project = Path(project)
         self.seed_value = seed
         self.port = port
         self.episode_seconds = episode_seconds
+        self.reward = {**DEFAULT_REWARD, **(reward or {})}
         self.show_window = show_window
         self.render_mode = "human" if show_window else None
         self.log_path = log_path or PROJECT / "training/runs" / f"godot-{port}.log"
@@ -148,7 +171,7 @@ class ZombieEnv(gym.Env):
         self.client = ProjectProcess(
             self.godot, self.project, seed=self.seed_value, port=self.port,
             episode_seconds=self.episode_seconds, show_window=self.show_window,
-            log_path=self.log_path,
+            log_path=self.log_path, reward=self.reward,
         )
         if self.client.num_envs != 1 or self.client.action_space.shape != (7,):
             self.close()

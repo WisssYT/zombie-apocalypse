@@ -6,8 +6,8 @@ signal chosen(index: int)
 signal open_folder
 
 const Style := preload("res://training/replay_style.gd")
-const METRICS := ["seconds", "kills", "collisions", "fell_off", "reward"]
-const NAMES := {"seconds": "TIME", "kills": "KILLS", "collisions": "COLLISIONS", "fell_off": "FELL OFF", "reward": "REWARD"}
+const METRICS := ["seconds", "dodged", "kills", "collisions", "fell_off", "reward"]
+const NAMES := {"seconds": "TIME", "dodged": "DODGED", "kills": "KILLS", "collisions": "COLLISIONS", "fell_off": "FELL OFF", "reward": "REWARD"}
 const PAPER := Color("0b0b0c")
 
 var rows: Array = []

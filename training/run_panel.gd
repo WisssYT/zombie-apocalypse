@@ -14,6 +14,7 @@ var note := ""
 var noise := -1.0
 var collisions := 0
 var fell_off := 0
+var dodged := 0
 var status := ""
 var end_time := 0.0
 var now := 0.0
@@ -47,6 +48,10 @@ func _draw() -> void:
 	if finished:
 		color = Style.BEHIND if status == "died" else Style.GOLD if status == "timeout" else Style.DIM
 	Style.text(self, Vector2(right, 98), Style.clock(now), 48, color, true, HORIZONTAL_ALIGNMENT_RIGHT)
+	# Dodged hound charges sit left of the timer when there's room for both.
+	var dodge_text := "DODGED %d" % dodged
+	if Style.width_of(dodge_text) + Style.width_of(Style.clock(now), 48, true) + 48.0 < w:
+		Style.text(self, Vector2(14, 98), dodge_text, 16, Style.AHEAD if dodged else Style.DIM)
 	draw_line(Vector2(0, 108), Vector2(w, 108), Style.LINE)
 	draw_line(Vector2(0, SPLITS_TOP - 4), Vector2(w, SPLITS_TOP - 4), Style.LINE)
 	var count := maxi(kills.size(), best.size())

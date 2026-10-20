@@ -31,6 +31,9 @@ var balance_stress := 0.0
 var grace_time := 0.7
 var charge_cooldown := 0.0
 var locked_charge := Vector3.FORWARD
+# Statistics only: where the player stood when this charge locked on, and how close it got.
+var charge_target_start := Vector3.ZERO
+var charge_closest := INF
 var attack_cooldown := 0.0
 var hit_flash := 0.0
 var age := 0.0
@@ -133,6 +136,7 @@ func _physics_process(delta: float) -> void:
 		momentum = locked_charge * charge_speed
 		play_clip("Run", 2.0)
 		if state_time <= 0.0:
+			report_charge_miss()
 			begin_recovery()
 	elif state in ["skid", "fallen", "recover", "attack"]:
 		momentum = momentum.move_toward(Vector3.ZERO, (9.0 if state == "skid" else 16.0) * delta)
@@ -159,10 +163,16 @@ func _physics_process(delta: float) -> void:
 	handle_enemy_collisions(incoming)
 	face_heading()
 	if state == "charge":
-		if can_hit_player(1.35):
+		var offset: Vector3 = player.global_position - global_position
+		offset.y = 0.0
+		charge_closest = minf(charge_closest, offset.length())
+		# The hound's 2.1 m body stops against the player about 1.45 m away, beyond
+		# the 1.35 m reach, so a head-on charge used to bump without hurting.
+		if can_hit_player(1.35) or touched_player():
 			player.take_damage(18.0)
 			begin_recovery()
 		elif is_on_wall():
+			report_charge_miss()
 			begin_recovery()
 	elif not is_hound and state == "chase" and attack_cooldown <= 0.0 and can_hit_player(1.4):
 		player.take_damage(10.0)
@@ -207,6 +217,8 @@ func begin_charge_warning(target: Vector3) -> void:
 	momentum = Vector3.ZERO
 	face_heading()
 	warning.show()
+	charge_target_start = player.global_position
+	charge_closest = INF
 	# This line is fixed when the warning starts. It never tracks a dodge.
 	warning.global_position = global_position + locked_charge * (charge_speed * 0.65 * 0.5)
 	warning.global_position.y = -0.44
@@ -309,6 +321,18 @@ func knock_down(launch: Vector3, duration := 1.9) -> bool:
 	# Creating physics bodies is deferred until the current collision step finishes.
 	start_ragdoll.call_deferred(momentum)
 	return true
+
+func touched_player() -> bool:
+	for index in range(get_slide_collision_count()):
+		if get_slide_collision(index).get_collider() == player:
+			return true
+	return false
+
+# A charge counts as dodged only if the player moved off the spot it locked onto
+# and it still came close; standing still or hiding in the crowd doesn't count.
+func report_charge_miss() -> void:
+	if charge_closest <= 3.0 and player.global_position.distance_to(charge_target_start) >= 1.0:
+		report("charge_dodged")
 
 # Statistics only (collisions, falls); never changes what enemies do.
 func report(event: String) -> void:
