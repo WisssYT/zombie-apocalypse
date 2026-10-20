@@ -1,5 +1,9 @@
 extends CharacterBody3D
 const BULLET_SCENE = preload("res://bullet.tscn")
+# Where the weapon pivot sits relative to the first-person camera: close enough for the arms to reach.
+const FPS_WEAPON_OFFSET := Vector3(-0.14, -0.48, 0.07)
+# Rolls the rifle so its textured side faces the camera instead of its stretched top.
+const FPS_WEAPON_CANT := deg_to_rad(-20.0)
 
 var shot_cooldown: float = 0.0
 @export var magazine_size: int = 12
@@ -92,8 +96,7 @@ func set_fps_mode(enabled: bool) -> void:
 
 func update_fps_pose() -> void:
 	fps_rig.rotation = Vector3(look_pitch, look_yaw, 0)
-	$WeaponPivot.global_transform = fps_camera.global_transform
-	$WeaponPivot.position -= fps_camera.global_basis.y * 0.6
+	$WeaponPivot.global_transform = Transform3D(fps_camera.global_basis * Basis(Vector3.BACK, FPS_WEAPON_CANT), fps_camera.global_transform * FPS_WEAPON_OFFSET)
 
 # A future visual-learning adapter can use this camera, not enemy coordinates.
 func get_observation_camera() -> Camera3D:
