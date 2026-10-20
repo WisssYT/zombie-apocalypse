@@ -1,0 +1,23 @@
+AK-74 gunshot
+Title: Ak74 Sound Effect
+Author: Sovetsky_Rastov72 (Sovetsky Rastov)
+Source: https://pixabay.com/sound-effects/film-special-effects-ak74-sound-effect-351437/
+License: Pixabay Content License
+https://pixabay.com/service/license-summary/
+Project file: ak74_shot_351437.wav
+Adaptation: MP3 decoded to 44.1kHz stereo PCM WAV; 25ms leading silence removed; tail faded.
+
+Reload
+Title: Gun Reload Sounds
+Author: SpringySpringo
+Source: https://opengameart.org/content/gun-reload-sounds
+Selected attachment: gunreload1.wav (first attachment)
+Download: https://opengameart.org/sites/default/files/gunreload1.wav
+License: CC0
+https://creativecommons.org/publicdomain/zero/1.0/
+Project file: gunreload1.wav
+Adaptation: original 0.05s-1.56s segment, pitch-preserving tempo 1.217741935,
+padded/trimmed to 1.24s, -2dB gain, 3ms fade-in and 10ms fade-out.
+
+Downloaded: 2026-10-20
+Original sci-fi gunshot and generated reload remain as unused files.

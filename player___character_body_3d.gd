@@ -32,6 +32,20 @@ var fps_mode := false
 var look_yaw := 0.0
 var look_pitch := 0.0
 @export var mouse_sensitivity: float = 0.0025
+@export_group("Recoil")
+@export var recoil_camera_pitch_degrees := 1.4
+@export var recoil_camera_side_degrees := 0.2
+@export var recoil_camera_return_speed := 6.0
+@export var recoil_weapon_pitch_degrees := 7.0
+@export var recoil_weapon_back_distance := 0.12
+@export var recoil_weapon_return_speed := 14.0
+var camera_recoil := Vector2.ZERO
+var weapon_recoil := 0.0
+var recoil_side := 1.0
+var gun_rest: Transform3D
+var muzzle_rest: Transform3D
+@onready var gun_model: Node3D = $WeaponPivot/GunModel
+@onready var muzzle_marker: Marker3D = $WeaponPivot/Muzzle
 @onready var fps_rig: Node3D = $FirstPersonRig
 @onready var fps_camera: Camera3D = $FirstPersonRig/FirstPersonCamera
 @onready var overhead_camera: Camera3D = get_parent().get_node("Camera3D")
@@ -42,6 +56,8 @@ var look_pitch := 0.0
 var crosshair: Label
 
 func _ready() -> void:
+	gun_rest = gun_model.transform
+	muzzle_rest = muzzle_marker.transform
 	player_material = $MeshInstance3D.material_override.duplicate()
 	$MeshInstance3D.material_override = player_material
 	var overlay := CanvasLayer.new()
@@ -80,6 +96,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		update_fps_pose()
 
 func set_fps_mode(enabled: bool) -> void:
+	reset_recoil()
 	fps_mode = enabled
 	if enabled:
 		look_yaw = $WeaponPivot.rotation.y
@@ -95,7 +112,10 @@ func set_fps_mode(enabled: bool) -> void:
 	crosshair.visible = enabled
 
 func update_fps_pose() -> void:
-	fps_rig.rotation = Vector3(look_pitch, look_yaw, 0)
+	fps_rig.rotation = Vector3(
+		clampf(look_pitch + camera_recoil.x, deg_to_rad(-80), deg_to_rad(80)),
+		look_yaw + camera_recoil.y, 0
+	)
 	$WeaponPivot.global_transform = Transform3D(fps_camera.global_basis * Basis(Vector3.BACK, FPS_WEAPON_CANT), fps_camera.global_transform * FPS_WEAPON_OFFSET)
 
 # A future visual-learning adapter can use this camera, not enemy coordinates.
@@ -105,6 +125,7 @@ func get_observation_camera() -> Camera3D:
 func _physics_process(delta: float) -> void:
 	if dead:
 		return
+	update_recoil(delta)
 	hurt_cooldown = maxf(0.0, hurt_cooldown - delta)
 	player_material.albedo_color = Color(1, 0.2, 0.15) if hurt_cooldown > 0.25 else Color(0.236, 0.414, 1)
 	if global_position.y < -8.0:
@@ -241,7 +262,8 @@ func shoot() -> void:
 	get_tree().current_scene.add_child(bullet)
 
 	bullet.global_position = muzzle.global_position
-	bullet.direction = -muzzle.global_transform.basis.z.normalized()
+	# Overhead aim stays on the mouse plane; cosmetic barrel kick adds no vertical spread.
+	bullet.direction = -$WeaponPivot.global_basis.z.normalized()
 	if fps_mode:
 		var origin := fps_camera.global_position
 		var target := origin - fps_camera.global_basis.z * 100.0
@@ -251,6 +273,44 @@ func shoot() -> void:
 		if not hit.is_empty():
 			target = hit.position
 		bullet.direction = (target - muzzle.global_position).normalized()
+	# Apply kick after choosing this shot's aim. Subsequent FPS shots use the kicked camera.
+	add_recoil()
+
+func add_recoil() -> void:
+	weapon_recoil = minf(weapon_recoil + 1.0, 1.7)
+	if fps_mode:
+		camera_recoil.x = minf(camera_recoil.x + deg_to_rad(recoil_camera_pitch_degrees), deg_to_rad(5.0))
+		camera_recoil.y = clampf(camera_recoil.y + deg_to_rad(recoil_camera_side_degrees) * recoil_side, deg_to_rad(-0.8), deg_to_rad(0.8))
+		update_fps_pose()
+	recoil_side *= -1.0
+	apply_weapon_recoil()
+
+func update_recoil(delta: float) -> void:
+	# Exponential return behaves consistently at different frame rates.
+	weapon_recoil *= exp(-recoil_weapon_return_speed * delta)
+	camera_recoil *= exp(-recoil_camera_return_speed * delta)
+	if weapon_recoil < 0.001:
+		weapon_recoil = 0.0
+	if camera_recoil.length_squared() < 0.00000001:
+		camera_recoil = Vector2.ZERO
+	apply_weapon_recoil()
+
+func apply_weapon_recoil() -> void:
+	var kick := Transform3D(
+		Basis.from_euler(Vector3(deg_to_rad(recoil_weapon_pitch_degrees) * weapon_recoil, 0, 0)),
+		Vector3(0, 0, recoil_weapon_back_distance * weapon_recoil)
+	)
+	gun_model.transform = gun_rest * kick
+	# Keep the muzzle attached to the moving barrel. Existing arm IK follows GunModel.
+	muzzle_marker.transform = gun_model.transform * gun_rest.affine_inverse() * muzzle_rest
+
+func reset_recoil() -> void:
+	camera_recoil = Vector2.ZERO
+	weapon_recoil = 0.0
+	recoil_side = 1.0
+	apply_weapon_recoil()
+	if fps_mode:
+		update_fps_pose()
 
 func take_damage(amount: float) -> void:
 	if dead or hurt_cooldown > 0.0:
@@ -260,6 +320,7 @@ func take_damage(amount: float) -> void:
 	hurt_sound.play()
 	if health <= 0.0:
 		dead = true
+		reset_recoil()
 		velocity = Vector3.ZERO
 		player_material.albedo_color = Color(0.25, 0.25, 0.3)
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

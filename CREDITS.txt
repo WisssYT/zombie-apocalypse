@@ -11,7 +11,7 @@ Art by bitkiln - PSX Horror Monsters Free Sampler
 https://bitkiln.itch.io/psx-horror-monsters-free-sampler
 License included in models/bitkiln/LICENSE.txt.
 
-GUNSHOT
+LEGACY GUNSHOT (unused original asset)
 Sci Fi Gun Shot by SoundReality (Jurij)
 https://pixabay.com/sound-effects/film-special-effects-sci-fi-gun-shot-312659/
 Pixabay Content License: https://pixabay.com/service/license-summary/
@@ -39,3 +39,16 @@ Worn Concrete Floor by Dimitrios Savva / Poly Haven
 https://polyhaven.com/a/worn_concrete_floor
 CC0: https://creativecommons.org/publicdomain/zero/1.0/
 Changes: 128px textures, 5-bit diffuse colour channels and dark slate material.
+
+AK-74 GUNSHOT
+Ak74 Sound Effect by Sovetsky_Rastov72 (Sovetsky Rastov)
+https://pixabay.com/sound-effects/film-special-effects-ak74-sound-effect-351437/
+Pixabay Content License: https://pixabay.com/service/license-summary/
+Changes: decoded to WAV, removed 25ms leading silence, faded tail.
+
+AK RELOAD
+Gun Reload Sounds by SpringySpringo - first attachment, gunreload1.wav
+https://opengameart.org/content/gun-reload-sounds
+CC0: https://creativecommons.org/publicdomain/zero/1.0/
+Changes: trimmed outer silence, tempo adjusted to the existing 1.25-second reload,
+short fades and -2dB gain. No gameplay timing changes.
