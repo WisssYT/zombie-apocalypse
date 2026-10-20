@@ -60,6 +60,7 @@ directional_shadow_max_distance = 70.0
 transform = Transform3D(0.9985082, 0.006358876, 0.05423051, -0.04301688, 0.7033199, 0.70957077, -0.033629324, -0.71084505, 0.7025443, 0.74957275, 15, 16.67566)
 projection = 1
 current = true
+cull_mask = 1047551
 size = 34.0
 
 [node name="Player _ CharacterBody3D" type="CharacterBody3D" parent="." unique_id=353800311]
