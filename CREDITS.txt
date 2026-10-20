@@ -33,3 +33,9 @@ Textures: from texturer.com per the author; terms at http://texturer.com/terms/
 so those terms were not checked when this was added).
 Changes: imported weapon pack.fbx and its textures only; the AK-74 is the player rifle,
 rotated and scaled to the old rifle's size. The pistol's texture is missing from the original pack.
+
+ROOFTOP SURFACE
+Worn Concrete Floor by Dimitrios Savva / Poly Haven
+https://polyhaven.com/a/worn_concrete_floor
+CC0: https://creativecommons.org/publicdomain/zero/1.0/
+Changes: 128px textures, 5-bit diffuse colour channels and dark slate material.

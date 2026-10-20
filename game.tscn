@@ -11,12 +11,19 @@
 [ext_resource type="Script" path="res://survivor_visual.gd" id="9_survivor_visual"]
 [ext_resource type="PackedScene" uid="uid://d28km60cevr1x" path="res://models/psx_people/glb/survivor_woman.glb" id="10_survivor"]
 [ext_resource type="PackedScene" path="res://apocalyptic_city.tscn" id="11_city"]
-[ext_resource type="Texture2D" uid="uid://bfaa1gr8imtun" path="res://models/apocalyptic_city/concrete.jpg" id="12_concrete"]
+[ext_resource type="Texture2D" path="res://models/roof_concrete/worn_concrete_diffuse_128.png" id="12_concrete"]
+[ext_resource type="Texture2D" path="res://models/roof_concrete/worn_concrete_normal_gl_128.png" id="14_roof_normal"]
 [ext_resource type="Script" path="res://first_person_arms.gd" id="13_fp_arms"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_e2o6t"]
-albedo_color = Color(0.04904674, 0.049050905, 0.15296969, 1)
+resource_name = "PSX Dark Worn Concrete"
+albedo_color = Color(0.34, 0.38, 0.43, 1)
 albedo_texture = ExtResource("12_concrete")
+texture_filter = 3
+roughness = 1.0
+normal_enabled = true
+normal_scale = 0.22
+normal_texture = ExtResource("14_roof_normal")
 uv1_scale = Vector3(8, 5, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_mwb40"]

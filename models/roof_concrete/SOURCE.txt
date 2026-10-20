@@ -1,0 +1,10 @@
+Worn Concrete Floor by Dimitrios Savva / Poly Haven
+https://polyhaven.com/a/worn_concrete_floor
+License: CC0 1.0 / public domain
+https://creativecommons.org/publicdomain/zero/1.0/
+https://polyhaven.com/license
+Source: 1K diffuse and OpenGL normal maps from Poly Haven.
+Changes: resized to 128 x 128; diffuse quantized to 5 bits per channel.
+Uses nearest filtering with mipmaps, a dark slate material tint, matte finish,
+and a weak normal map to keep the PSX look and readable enemy silhouettes.
+Diffuse contrast reduced to 55% around a neutral midpoint to keep enemy silhouettes readable.
