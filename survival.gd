@@ -88,9 +88,9 @@ func spawn_zombie() -> Node3D:
 	zombie.rush_duration = start.distance_to(reveal) / RUSH_SPEED
 	zombie.climb_duration = reveal.distance_to(top) / 1.25
 	zombie.speed = rng.randf_range(7.8, 8.4) if use_hound else rng.randf_range(6.1, 6.6)
+	# Place it before adding: added at the origin first, it would shove the player there.
+	zombie.transform = Transform3D(Basis.looking_at(-outward, Vector3.UP), start)
 	add_child(zombie)
-	zombie.global_position = start
-	zombie.look_at(start - outward, Vector3.UP)
 	return zombie
 
 func hidden_from_overhead(center: Vector3, outward: Vector3) -> bool:
