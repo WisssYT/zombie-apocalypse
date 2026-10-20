@@ -1,3 +1,9 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Local Python runtime, training outputs and exported binaries
+.venv/
+__pycache__/
+training/runs/
+training/builds/

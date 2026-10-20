@@ -52,3 +52,10 @@ https://opengameart.org/content/gun-reload-sounds
 CC0: https://creativecommons.org/publicdomain/zero/1.0/
 Changes: trimmed outer silence, tempo adjusted to the existing 1.25-second reload,
 short fades and -2dB gain. No gameplay timing changes.
+
+TRAINING SOFTWARE
+Godot RL Agents plugin by Edward Beeching and contributors
+https://github.com/edbeeching/godot_rl_agents_plugin
+MIT license: addons/godot_rl_agents/LICENSE
+Source revision: 998c357a0cd09b37f40a36d70c7867fc9f682338
+The addon is vendored unchanged; project-specific training scripts are in training/.

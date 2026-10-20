@@ -7,7 +7,19 @@ Updated: 2026-10-20
 The game is playable. We have added controls that code can drive and a numerical
 description of the game for a future reinforcement-learning agent.
 
-**There is no neural network, Python connection or training running yet.**
+**A single-instance Python training connection is now implemented.** The separate
+`training.tscn` and `training/` scripts provide actions, observations, initial rewards
+and resets. `training/train.py` can create PPO's neural networks. No successful
+survival policy has been trained, and no Colab/Kaggle session has been run yet.
+See [training/README.md](training/README.md) for commands and the current pipeline.
+The pipeline now records compressed state/brain replays for every episode by
+default. A **native Godot viewer** shows original gameplay assets beside actual
+actor/critic neuron activations and selectable incoming weights. It uses each
+decision's matching weight snapshot, verified against live inference values.
+There is no HTML viewer or video recording. Full controls and limitations are in
+the training README. A tiny 128-decision integration test included four PPO
+updates; this does not establish survival skill. The labelled local viewer demo
+uses an untrained network and test-only initial output biases.
 Checking **Ai Controlled** selects the code-controlled inputs. It does not create
 an intelligent player: without commands, the player stays still and does not shoot.
 
@@ -94,11 +106,13 @@ In AI mode:
 - The same ammo, cooldown, slowdown, dash and recoil rules still apply.
 - Movement and shooting persist until their variables change. Reload/dash requests
   are consumed once, including requests blocked by gameplay restrictions.
-- Death clears the AI action variables. Automatic round resets are not implemented.
+- Death clears the AI action variables. The separate training scene implements
+  round resets; normal human play still uses Enter after death.
 
 The F2 toggle was removed. There is no in-game console or keyboard AI toggle.
-There is also no single action-receiving function or formal trainer action space yet;
-the future bridge still needs to write these inputs through a defined interface.
+The training controller's `set_action()` now receives a seven-value continuous action:
+move X/Z, aim X/Z, shoot, reload and dash. It converts the aim vector to the existing
+angle field. The normal player script still holds the input variables listed above.
 
 ## Observations implemented
 
@@ -147,16 +161,17 @@ does not limit the full numerical array.
 The checkbox is currently **off in the saved scene**. Enable it when needed and
 disable it before long training runs. Avoid printing every physics tick.
 
-## Neural network plan - not implemented
+## Neural network setup
 
 Use Python with Stable Baselines3 PPO and an `MlpPolicy` for numerical inputs.
-An initial configuration discussed was two 128-unit layers for the action network
-and two 128-unit layers for the value network. This is a starting experiment,
-not a trained model or a proven configuration for this game.
+`training/train.py` uses two 128-unit layers for the action network and two 128-unit
+layers for the value network. This is a starting experiment, not a successful
+trained survival model or a proven configuration for this game.
 
 PPO uses rewards from gameplay to update the network. Merely creating the network
-does not connect it to Godot. The Python environment (`env`) must provide the
-observation/action formats and working reset/step operations first.
+does not establish skill. `training/zombie_env.py` now provides the Gymnasium
+environment and starts Godot automatically. It preserves the final observation
+and distinguishes death from timeout so PPO can handle both correctly.
 
 With a small numerical-input PPO policy, benchmark CPU training before assuming a
 cloud GPU helps. Godot simulation speed and available CPU cores can be the bottleneck.
@@ -167,26 +182,26 @@ References:
 - [Stable Baselines3 PPO](https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html)
 - [Policy networks](https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html)
 - [Custom environments](https://stable-baselines3.readthedocs.io/en/master/guide/custom_env.html)
-- [Godot RL Agents](https://github.com/edbeeching/godot_rl_agents), a possible bridge;
-  it has been discussed but is not installed/integrated in this project.
+- [Godot RL Agents](https://github.com/edbeeching/godot_rl_agents), now used by the
+  single-instance pipeline. The Godot addon is vendored under `addons/` with its
+  MIT license; the isolated Python environment uses `godot-rl==0.8.2`.
 
 ## Next steps, in order
 
-1. Define one action-receiving function for movement, angle, shoot, reload and dash.
-   Choose the formal action format for the Python trainer.
-2. Implement controlled round resets and a time limit. Return the terminal observation
-   before resetting so the trainer can learn from death. Distinguish death from timeout.
-3. Add reward reporting: initially survival, effective damage/kills, damage taken and
-   death. Tune rewards after watching behavior. Log enemy collisions initially
-   rather than directly rewarding repeat knockdowns.
-4. Connect Godot and Python with synchronized simulation steps. Test observations,
-   random actions, death and reset before any long learning run.
-5. Create the PPO network and run a short local learning experiment. Begin with an
-   easier training configuration, then increase enemies/difficulty.
-6. Prepare a Linux training build and Colab/Kaggle notebook. Save checkpoints and
-   resume across notebook sessions. No cloud runtime or notebook has been set up yet.
-7. Evaluate on new spawn sequences; track survival, kills, damage, ammo efficiency
-   and enemy collisions. Load checkpoints locally to watch/record progress.
+1. Single-instance checks are complete on Windows: actions, seeded resets, death,
+   timeouts, final observations and SB3 auto-reset passed. Network creation and
+   save/load were checked without learning a policy. Each action advances four
+   60 Hz ticks. Re-run `training/smoke_test.py` after pipeline changes.
+2. Prepare a Linux package and Colab/Kaggle notebook, then repeat the checks there.
+   The main training destination remains the cloud; local runs are integration tests.
+3. Run a short PPO experiment in the notebook. Initial reward is +0.05 per second,
+   +2 per kill, -0.02 per health point lost and -2 on death. Separate hit/damage-dealt
+   rewards and collision telemetry are not implemented. Tune using actual behavior.
+4. Save/resume checkpoints and evaluate on new spawn sequences. Track survival,
+   kills, damage and ammo use; add collision statistics for the YouTube experiment.
+5. Benchmark 1, 2, 4, 8 and more instances before choosing a count. Only one process
+   is supported by the current adapter; 100 instances is not assumed feasible on
+   a notebook runtime. Keep whichever count produces the best overall throughput.
 
 The current game has 60 total rounds and endless spawning. Start with timed rounds
 using that ammo supply; decide on resupply before pursuing indefinite combat survival.
@@ -197,7 +212,18 @@ using that ammo supply; decide on resupply before pursuing indefinite combat sur
   dash restrictions, recoil, observation shape/padding, sorting and enemy removal.
 - Combat observation checks exercised real hound warning-to-charge and
   recovery-to-chase transitions, plus climbing/fallen movement reads.
+- Pipeline checks passed the Stable Baselines3 environment checker, same-seed
+  transition reproduction, invalid-action rejection and timeout bootstrapping.
+- Local test stack: Python 3.12, godot-rl 0.8.2, SB3 2.4.0, Gymnasium 1.0.0,
+  NumPy 1.26.4 and PyTorch 2.14.1. Packages are isolated in ignored `.venv/`.
 - Enemy controller and ragdoll behavior were not modified for the observation work.
+- Replay checks covered 128 actual decisions across policy updates, live value/
+  log-probability agreement, sampled vs clipped actions, terminal vs reset frames,
+  checkpoint checksum rejection, and native Godot playback. A separate fixture
+  captured and replayed existing ragdoll bone poses without changing their physics.
+- The normal scene, enemy controller, ragdoll script and skyline resource remained
+  unchanged. Local GUI capture was checked on Intel UHD. Linux cloud training
+  and large-worker recording throughput still need validation.
 - Temporary check scripts/backups are outside the project under
   `C:\Users\user\Documents\Codex\2026-10-19\i-m-building-a-3d-zombie\work`.
 - The user wants simple explanations and sometimes wants to code changes personally.
@@ -210,6 +236,8 @@ using that ammo supply; decide on resupply before pursuing indefinite combat sur
 | `game.tscn` | Main playable scene. |
 | `player___character_body_3d.gd` | Human/AI controls, combat, cameras, recoil and observations. |
 | `AI_OBSERVATIONS.md` | Exact observation schema. |
+| `training.tscn`, `training/README.md` | Separate training scene and pipeline instructions. |
+| `training/zombie_env.py`, `training/train.py` | Python environment and PPO entry point. |
 | `survival.gd` | Spawning, HUD, kills, manual restart. |
 | `enemy_controller.gd` | Zombie/hound movement, charges, collisions and combat. |
 | `enemy_ragdoll.gd` | Existing finished ragdoll implementation. |
@@ -218,5 +246,5 @@ using that ammo supply; decide on resupply before pursuing indefinite combat sur
 
 GitHub: **WisssYT/zombie-apocalypse**, private repository, branch **main**.
 Recoil/audio were already pushed in `1d62d30`; this summary accompanies the later
-AI groundwork and the current saved project/editor changes. No training run has
-been completed, and no survival results should be claimed yet.
+AI groundwork and the current saved project/editor changes. No substantive
+survival training experiment has been completed; no survival results should be claimed yet.
