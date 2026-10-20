@@ -458,6 +458,7 @@ func show_episode(index: int) -> void:
 	run.attempt = row.number
 	run.attempts = archive.episodes.size()
 	run.trained = archive.policy_timestep(loaded, archive.policy_id_at(loaded, 0))
+	run.hours = -1.0 if row.get("trained_hours") == null else float(row.trained_hours)
 	var label: String = archive.sessions[row.session].manifest.get("label", "")
 	run.note = "EVALUATION" if row.mode == "evaluation" else "" if label == "PPO training" else "TEST RUN"
 	run.noise = archive.noise(loaded)

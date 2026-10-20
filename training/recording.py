@@ -22,6 +22,7 @@ import hashlib
 import json
 from pathlib import Path
 import platform
+import time
 import uuid
 
 import gymnasium as gym
@@ -73,6 +74,18 @@ def policy_tensors(policy):
     return [t.detach().cpu().numpy().astype("<f4") for t in tensors]
 
 
+def previous_training_hours(replays):
+    """Training hours already spent in earlier sessions of this run folder."""
+    hours = 0.0
+    for index in Path(replays).glob("*/index.json"):
+        try:
+            rows = json.loads(index.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        hours = max([hours] + [row.get("trained_hours") or 0.0 for row in rows])
+    return hours
+
+
 class EpisodeRecorder(gym.Wrapper):
     """One worker. The callback attaches the actual sampled action before saving.
 
@@ -91,6 +104,10 @@ class EpisodeRecorder(gym.Wrapper):
             (self.directory / name).mkdir(parents=True, exist_ok=True)
         (self.directory / ".gdignore").touch()
         self.entries = {}
+        self.mode = mode
+        # Training time keeps counting across resumed sessions in the same output.
+        self.started = time.monotonic()
+        self.hours_before = previous_training_hours(Path(output) / "replays") if mode == "training" else 0.0
         self.policy_list = []
         self.sequence = 0
         self.current = None
@@ -221,6 +238,9 @@ class EpisodeRecorder(gym.Wrapper):
             "dodged": final["stats"].get("charge_dodged", 0),
             "timestep": episode["timestep_end"],
             "bytes": sum(target.with_suffix(s).stat().st_size for s in (".bin.gz", ".json.gz")),
+            # Wall-clock training time when this game ended (training sessions only).
+            "trained_hours": round(self.hours_before + (time.monotonic() - self.started) / 3600, 3)
+            if self.mode == "training" else None,
         }
         write_json(self.directory / "index.json", list(self.entries.values()))
 

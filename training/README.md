@@ -238,7 +238,8 @@ One folder per training session under `replays/`, so resumed runs never overwrit
   rewards, live values and log-probabilities.
 - `episodes/<id>.json.gz`: world samples (T+1), status, seed, training step range
   and which weight snapshot made each decision.
-- `index.json`: one summary row per game (time, kills, reward, collisions, falls) for the attempts screen.
+- `index.json`: one summary row per game (time, kills, reward, collisions, falls, dodges, training
+  steps and `trained_hours`, wall-clock training time that keeps counting across resumed sessions).
 - `manifest.json` also says whether the session is `training` (noisy) or `evaluation`.
 
 Games are saved when they end, and partly after each rollout (`in_progress`, then

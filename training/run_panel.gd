@@ -10,6 +10,7 @@ const SPLITS_TOP := 140.0
 var attempt := 0
 var attempts := 0
 var trained := -1
+var hours := -1.0
 var note := ""
 var noise := -1.0
 var collisions := 0
@@ -26,6 +27,9 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	custom_minimum_size = Vector2(200, SPLITS_TOP + ROWS * ROW + 34)
 
+static func hours_text(value: float) -> String:
+	return "%dMIN" % roundi(value * 60.0) if value < 1.0 else "%.1fH" % value
+
 func _draw() -> void:
 	var w := size.x
 	var right := w - 14.0
@@ -33,6 +37,8 @@ func _draw() -> void:
 	Style.text(self, Vector2(14, 28), "ATTEMPT %d" % attempt, 16, Style.TEXT, true)
 	Style.text(self, Vector2(right, 28), "OF %d" % attempts, 16, Style.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT)
 	var detail := "UNTRAINED" if trained <= 0 else "%s STEPS" % Style.steps(trained)
+	if trained > 0 and hours > 0.0:
+		detail += "  %s" % hours_text(hours)
 	if note != "":
 		detail += "  " + note
 	Style.text(self, Vector2(14, 50), detail, 16, Style.DIM)

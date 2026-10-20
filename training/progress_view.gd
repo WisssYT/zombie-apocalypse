@@ -6,6 +6,7 @@ signal chosen(index: int)
 signal open_folder
 
 const Style := preload("res://training/replay_style.gd")
+const RunPanel := preload("res://training/run_panel.gd")
 const METRICS := ["seconds", "dodged", "kills", "collisions", "fell_off", "reward"]
 const NAMES := {"seconds": "TIME", "dodged": "DODGED", "kills": "KILLS", "collisions": "COLLISIONS", "fell_off": "FELL OFF", "reward": "REWARD"}
 const PAPER := Color("0b0b0c")
@@ -160,13 +161,17 @@ func _tooltip(row: Dictionary, point: Vector2) -> void:
 		ending += "  EVAL"
 	var detail := "%s  %d KILLS  %d COLLISIONS  %d FELL" % [Style.clock(row.seconds), row.kills,
 		row.get("collisions", 0), row.get("fell_off", 0)]
-	var box := Rect2(point + Vector2(14, -64), Vector2(Style.width_of(detail) + 28, 58))
+	var when := "AFTER %s TRAINING STEPS" % Style.steps(_x_value(row))
+	if row.get("trained_hours") != null:
+		when += "  (%s)" % RunPanel.hours_text(float(row.trained_hours))
+	var box := Rect2(point + Vector2(14, -84), Vector2(maxf(Style.width_of(detail), Style.width_of(when)) + 28, 80))
 	box.position.x = minf(box.position.x, size.x - box.size.x - 10)
 	box.position.y = maxf(box.position.y, 10)
 	draw_rect(box, Color("1c1c1e"))
 	draw_rect(box, Color(Style.TEXT, 0.25), false, 1.0)
 	Style.text(self, box.position + Vector2(14, 24), "ATTEMPT %d  %s" % [row.number, ending], 16, _color(row), true)
 	Style.text(self, box.position + Vector2(14, 46), detail, 16, Style.TEXT)
+	Style.text(self, box.position + Vector2(14, 68), when, 16, Style.DIM)
 
 func _nearest(point: Vector2) -> int:
 	if rows.is_empty():
