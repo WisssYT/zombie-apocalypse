@@ -1,7 +1,7 @@
 extends Node3D
-## Rewatch any recorded training game, with the network that played it.
+## Rewatch any recorded training attempt, with the network that played it.
 ## Open training/replay.tscn and press F6. It reads recordings from
-## training/runs/ (or any folder picked with "Open folder…"); no Python needed.
+## training/runs/ (or any folder picked on the attempts screen); no Python needed.
 ## Playback only moves the original models to their recorded poses: no game
 ## script, physics or ragdoll simulation runs.
 
@@ -10,13 +10,23 @@ const ENEMY := preload("res://zombie.tscn")
 const PLAYER_SCRIPT := preload("res://player___character_body_3d.gd")
 const Archive := preload("res://training/replay_archive.gd")
 const Capture := preload("res://training/replay_capture.gd")
+const Style := preload("res://training/replay_style.gd")
+const FpsBody := preload("res://training/replay_fps_body.gd")
 const BrainView := preload("res://training/brain_view.gd")
 const InputsView := preload("res://training/inputs_view.gd")
+const RunPanel := preload("res://training/run_panel.gd")
 const TimelineView := preload("res://training/timeline_view.gd")
 const ProgressView := preload("res://training/progress_view.gd")
 const SETTINGS := "user://replay_viewer.cfg"
 const SPEEDS := [0.25, 0.5, 1.0, 2.0, 4.0]
-const INK := Color("f0efec")
+const SPEED_LABELS := [".25X", ".5X", "1X", "2X", "4X"]
+# Same layers as the game: the body is hidden from the first-person camera,
+# the first-person arms and rifle are hidden from the overhead camera.
+const BODY_LAYER := 2
+const FIRST_PERSON_LAYER := 1 << 10
+const FPS_CULL_MASK := 1048573
+const EYE_HEIGHT := 0.65
+const GAP := 2.0
 
 var archive := Archive.new()
 var current := -1
@@ -29,22 +39,23 @@ var speed_index := 2
 var branch := "actor"
 var shown_step := -1
 var highlight_row := -1
+var best_loaded_for := ""
 
 var world: Node3D
 var camera: Camera3D
+var fps_camera: Camera3D
+var fps_body: Node3D
+var fps_pivot: Node3D
+var top_feed: Control
+var fps_feed: Control
 var overlay: Control
 var hud: Label
 var health_bar: ProgressBar
-var header: Label
-var banner: Label
 var brain: Control
 var keys: Control
+var run: Control
 var timeline: Control
 var progress: Control
-var play_button: Button
-var speed_button: Button
-var clock: Label
-var branch_buttons := {}
 var folder_dialog: FileDialog
 
 func _ready() -> void:
@@ -59,12 +70,16 @@ func _ready() -> void:
 	make_ui()
 	var scenery := GAME.instantiate()
 	var old_player = scenery.get_node("Player _ CharacterBody3D")
+	var pivot: Node3D = old_player.get_node("WeaponPivot")
+	_release(pivot)
+	old_player.remove_child(pivot)
 	scenery.remove_child(old_player)
 	old_player.free()
 	disable_simulation(scenery)
 	world.add_child(scenery)
 	camera = scenery.get_node("Camera3D")
 	camera.make_current()
+	make_first_person(pivot)
 	if args.has("check"):
 		run_check(root)
 		return
@@ -81,15 +96,25 @@ func _ready() -> void:
 		seek(float(args.step))
 	if args.has("branch"):
 		set_branch(args.branch)
+	if args.has("select"):
+		var parts: PackedStringArray = args.select.split(",")
+		brain.selected = Vector2i(parts[0].to_int(), parts[1].to_int())
+	if args.has("hover-row"):
+		highlight_row = args["hover-row"].to_int()
 	if args.has("progress"):
 		show_progress()
 	if args.has("screenshot"):
-		playing = false
+		set_playing(false)
 		for i in 4:
 			await RenderingServer.frame_post_draw
 		var result := get_viewport().get_texture().get_image().save_png(args.screenshot)
 		print("VIEWER_SCREENSHOT ", args.screenshot, " ", result)
 		get_tree().quit(result)
+
+func _release(node: Node) -> void:
+	node.owner = null
+	for child in node.get_children():
+		_release(child)
 
 # ---------------------------------------------------------------- playback
 
@@ -112,6 +137,12 @@ func disable_simulation(node: Node, stylize := false) -> void:
 	for child in node.get_children():
 		disable_simulation(child, stylize)
 
+static func set_layers(node: Node, layers: int) -> void:
+	if node is VisualInstance3D:
+		node.layers = layers
+	for child in node.get_children():
+		set_layers(child, layers)
+
 static func transform_from(data: Array) -> Transform3D:
 	return Transform3D(Basis(Vector3(data[0], data[1], data[2]),
 		Vector3(data[3], data[4], data[5]), Vector3(data[6], data[7], data[8])),
@@ -121,6 +152,18 @@ static func blend(a: Array, b, t: float) -> Transform3D:
 	var from := transform_from(a)
 	return from if b == null or t <= 0.0 else from.interpolate_with(transform_from(b), t)
 
+func make_first_person(pivot: Node3D) -> void:
+	# The game's own weapon pivot: rifle plus first_person_arms.gd, which poses
+	# the arms on the rifle from the stand-in body's fields.
+	fps_body = FpsBody.new()
+	fps_feed.get_child(0).add_child(fps_body)
+	for child in pivot.get_children():
+		if child.name != "FirstPersonArms":
+			disable_simulation(child, true)
+	set_layers(pivot.get_node("GunModel"), FIRST_PERSON_LAYER)
+	fps_body.add_child(pivot)
+	fps_pivot = pivot
+
 func create_actor(record: Dictionary) -> Dictionary:
 	var path: String = record.model
 	if not (path.begins_with("res://models/") or path in ["res://gun_model.tscn", "res://bullet.tscn"]):
@@ -128,6 +171,8 @@ func create_actor(record: Dictionary) -> Dictionary:
 		return {}
 	var model = load(path).instantiate()
 	disable_simulation(model, true)
+	if record.kind in ["player", "gun"]:
+		set_layers(model, BODY_LAYER)
 	world.add_child(model)
 	var entry := {"model": model, "animator": model.find_child("AnimationPlayer", true, false),
 		"skeleton": Capture.find_skeleton(model)}
@@ -219,28 +264,43 @@ func apply_frame() -> void:
 				if actors[identifier].has(key):
 					actors[identifier][key].queue_free()
 			actors.erase(identifier)
-	update_hud(frame, index)
+	update_first_person(index, t)
+	update_hud(frame)
 	var decision := mini(index, episode.steps - 1)
 	if decision != shown_step:
 		shown_step = decision
 		update_brain()
+	run.now = lerpf(frame.time, frames[mini(index + 1, frames.size() - 1)].time, t)
+	run.queue_redraw()
+	brain.head = at
+	brain.queue_redraw()
 	timeline.head = at
 	timeline.queue_redraw()
 	overlay.queue_redraw()
 
-func update_hud(frame: Dictionary, index: int) -> void:
+func update_first_person(index: int, t: float) -> void:
+	# Eye height above the player, looking along the weapon's actual aim, as in
+	# the game's first-person mode (AI aim has no pitch).
+	var next := mini(index + 1, frames.size() - 1)
+	var a: Array = frames[index].player_position
+	var b: Array = frames[next].player_position
+	var eye := Vector3(a[0], a[1], a[2]).lerp(Vector3(b[0], b[1], b[2]), t) + Vector3.UP * EYE_HEIGHT
+	var obs: PackedFloat32Array = episode.observations
+	var yaw := lerp_angle(atan2(-obs[index * 586 + 11], -obs[index * 586 + 12]),
+		atan2(-obs[next * 586 + 11], -obs[next * 586 + 12]), t)
+	fps_camera.global_transform = Transform3D(Basis(Vector3.UP, yaw), eye)
+	fps_pivot.global_transform = Transform3D(
+		fps_camera.global_basis * Basis(Vector3.BACK, PLAYER_SCRIPT.FPS_WEAPON_CANT),
+		fps_camera.global_transform * PLAYER_SCRIPT.FPS_WEAPON_OFFSET)
+	fps_body.reloading = frames[index].reloading
+	fps_body.reload_time_left = obs[index * 586 + 13]
+	fps_body.dead = frames[index].health <= 0.0
+
+func update_hud(frame: Dictionary) -> void:
+	# The game's own HUD, as the player saw it.
 	var ammo := "RELOADING..." if frame.reloading else "AMMO %d / %d" % [frame.ammo, frame.reserve]
 	hud.text = "HEALTH %d / 100 | Kills: %d\n%s\nSurvived: %ds" % [int(frame.health), frame.kills, ammo, int(frame.time)]
 	health_bar.value = frame.health
-	clock.text = "%s / %s" % [TimelineView.clock(frame.time), TimelineView.clock(frames.back().time)]
-	banner.visible = index == frames.size() - 1
-	match episode.meta.status:
-		"died":
-			banner.text = "Died after %s" % TimelineView.clock(frame.time)
-		"timeout":
-			banner.text = "Survived the whole round"
-		_:
-			banner.text = "Recording stops here (training was cut off)"
 
 func update_brain() -> void:
 	var result := archive.run(episode, shown_step, branch)
@@ -252,7 +312,7 @@ func update_brain() -> void:
 func integrity_note(result: Dictionary) -> String:
 	# Shown only if the saved weights fail to reproduce what the network did live.
 	if result.is_empty():
-		return "The weights for this moment are missing or damaged."
+		return "WEIGHTS MISSING OR DAMAGED"
 	var output: PackedFloat32Array = result.layers[3]
 	var error := 0.0
 	var tolerance := 0.001
@@ -268,7 +328,7 @@ func integrity_note(result: Dictionary) -> String:
 			var a: float = episode.raw_actions[shown_step * 7 + k] - output[k]
 			log_prob += -a * a / (2.0 * exp(2.0 * log_std)) - log_std - 0.5 * log(TAU)
 		error = absf(log_prob - episode.log_probs[shown_step])
-	return "" if error < tolerance else "These weights don't reproduce the live decision (off by %.4f)." % error
+	return "" if error < tolerance else "WEIGHTS DON'T MATCH THIS RECORDING (OFF BY %.4f)" % error
 
 func seek(frame: float) -> void:
 	if frames.is_empty():
@@ -282,10 +342,11 @@ func step(direction: int) -> void:
 	seek(round(frame_position()) + direction)
 
 func set_playing(value: bool) -> void:
-	if value and frame_position() >= frames.size() - 1:
+	if value and not frames.is_empty() and frame_position() >= frames.size() - 1:
 		play_time = frames[0].time
 	playing = value
-	play_button.text = "Pause" if playing else "Play"
+	timeline.playing = value
+	timeline.queue_redraw()
 
 func _process(delta: float) -> void:
 	if not playing or frames.is_empty() or progress.visible:
@@ -296,18 +357,43 @@ func _process(delta: float) -> void:
 		set_playing(false)
 	apply_frame()
 
-# ---------------------------------------------------------------- episodes
+# ---------------------------------------------------------------- attempts
+
+static func kill_times(episode_frames: Array) -> Array:
+	var times := []
+	for i in range(1, episode_frames.size()):
+		for kill in int(episode_frames[i].kills) - int(episode_frames[i - 1].kills):
+			times.append(float(episode_frames[i].time))
+	return times
+
+func load_best() -> void:
+	# Best attempt so far = most kills, then longest survival. Its kill times
+	# are the splits every other attempt is compared against.
+	if best_loaded_for == archive.root:
+		return
+	best_loaded_for = archive.root
+	run.best = []
+	run.best_attempt = 0
+	var best := {}
+	for row in archive.episodes:
+		if row.status in ["died", "timeout"] and int(row.kills) > 0 and (best.is_empty()
+				or row.kills > best.kills or row.kills == best.kills and row.seconds > best.seconds):
+			best = row
+	if best.is_empty():
+		return
+	var loaded := archive.load_episode(best)
+	if not loaded.is_empty():
+		run.best = kill_times(loaded.frames)
+		run.best_attempt = best.number
 
 func show_episode(index: int) -> void:
 	if index < 0 or index >= archive.episodes.size():
 		return
 	progress.visible = false
-	header.text = "Loading game %d…" % (index + 1)
 	await get_tree().process_frame
-	await get_tree().process_frame
+	load_best()
 	var loaded := archive.load_episode(archive.episodes[index])
 	if loaded.is_empty():
-		header.text = "Game %d could not be read (it may still be being written)." % (index + 1)
 		return
 	current = index
 	episode = loaded
@@ -315,13 +401,16 @@ func show_episode(index: int) -> void:
 	clear_actors()
 	shown_step = -1
 	var row: Dictionary = loaded.row
-	var trained_for := archive.policy_timestep(loaded, archive.policy_id_at(loaded, 0))
-	var trained := "untrained network" if trained_for <= 0 else \
-		"network trained for %s steps" % ProgressView.steps(trained_for)
-	header.text = "Game %d of %d   ·   %s" % [row.number, archive.episodes.size(), trained]
-	if archive.sessions[row.session].manifest.get("label", "") != "PPO training":
-		header.text += "\n" + archive.sessions[row.session].manifest.label
-	timeline.set_episode(frames, loaded.values)
+	run.attempt = row.number
+	run.attempts = archive.episodes.size()
+	run.trained = archive.policy_timestep(loaded, archive.policy_id_at(loaded, 0))
+	var label: String = archive.sessions[row.session].manifest.get("label", "")
+	run.note = "" if label == "PPO training" else "TEST RUN"
+	run.status = loaded.meta.status
+	run.end_time = frames.back().time
+	run.kills = kill_times(frames)
+	brain.values = loaded.values
+	timeline.set_episode(frames)
 	progress.current = index
 	play_time = frames[0].time
 	set_playing(true)
@@ -341,17 +430,27 @@ func show_progress(message := "") -> void:
 func open_folder(path: String) -> void:
 	var error := archive.open(path)
 	progress.source = path
-	if error != "":
-		show_progress(error)
-		return
-	show_progress()
+	show_progress(error)
 
 func set_branch(value: String) -> void:
 	branch = value
-	for key in branch_buttons:
-		branch_buttons[key].set_pressed_no_signal(key == value)
 	if not episode.is_empty():
 		update_brain()
+
+func on_bar(control: String) -> void:
+	match control:
+		"previous":
+			show_episode(current - 1)
+		"next":
+			show_episode(current + 1)
+		"play":
+			set_playing(not playing)
+		"speed":
+			speed_index = (speed_index + 1) % SPEEDS.size()
+			timeline.speed = SPEED_LABELS[speed_index]
+			timeline.queue_redraw()
+		"attempts":
+			show_progress()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo() and event.physical_keycode not in [KEY_LEFT, KEY_RIGHT]:
@@ -384,52 +483,49 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 # ---------------------------------------------------------------- layout
 
+func make_feed(share_with: SubViewport = null) -> SubViewportContainer:
+	var container := SubViewportContainer.new()
+	container.stretch = true
+	container.clip_contents = true
+	var viewport := SubViewport.new()
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	if share_with:
+		viewport.world_3d = share_with.find_world_3d()
+	else:
+		viewport.own_world_3d = true
+	container.add_child(viewport)
+	return container
+
 func make_ui() -> void:
 	if DisplayServer.get_name() != "headless":
-		DisplayServer.window_set_title("Zombie Apocalypse · training replays")
+		DisplayServer.window_set_title("Zombie Apocalypse - replays")
 		if not Array(OS.get_cmdline_user_args()).any(func(arg): return arg.begins_with("--screenshot")):
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
+	var screen := Control.new()
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	canvas.add_child(screen)
 	var background := ColorRect.new()
-	background.color = Color("111110")
+	background.color = Color("050505")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	canvas.add_child(background)
-	var layout := VBoxContainer.new()
-	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layout.add_theme_constant_override("separation", 0)
-	canvas.add_child(layout)
-	var columns := HBoxContainer.new()
-	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	columns.add_theme_constant_override("separation", 0)
-	layout.add_child(columns)
+	screen.add_child(background)
 
-	# The game, as the overhead camera saw it, with the game's own HUD.
-	var game_area := Control.new()
-	game_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	game_area.size_flags_stretch_ratio = 1.3
-	game_area.clip_contents = true
-	columns.add_child(game_area)
-	var container := SubViewportContainer.new()
-	container.stretch = true
-	container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	game_area.add_child(container)
-	var viewport := SubViewport.new()
-	viewport.own_world_3d = true
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	container.add_child(viewport)
+	# Overhead feed with the game's own HUD and the input display.
+	top_feed = make_feed()
+	screen.add_child(top_feed)
 	world = Node3D.new()
-	viewport.add_child(world)
+	top_feed.get_child(0).add_child(world)
 	overlay = Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.draw.connect(draw_highlight)
-	game_area.add_child(overlay)
+	top_feed.add_child(overlay)
 	var panel := PanelContainer.new()
 	panel.position = Vector2(18, 18)
 	panel.custom_minimum_size = Vector2(320, 100)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	game_area.add_child(panel)
+	top_feed.add_child(panel)
 	var column := VBoxContainer.new()
 	panel.add_child(column)
 	hud = Label.new()
@@ -439,110 +535,51 @@ func make_ui() -> void:
 	health_bar.max_value = 100.0
 	health_bar.custom_minimum_size = Vector2(300, 18)
 	column.add_child(health_bar)
-	header = Label.new()
-	header.anchor_right = 1.0
-	header.offset_left = 350
-	header.offset_right = -18
-	header.offset_top = 22
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	header.add_theme_font_size_override("font_size", 17)
-	header.add_theme_constant_override("outline_size", 6)
-	header.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	game_area.add_child(header)
-	banner = Label.new()
-	banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner.add_theme_font_size_override("font_size", 30)
-	banner.add_theme_constant_override("outline_size", 10)
-	banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	banner.visible = false
-	game_area.add_child(banner)
 	keys = InputsView.new()
 	keys.anchor_top = 1.0
 	keys.anchor_bottom = 1.0
-	keys.offset_left = 18
-	keys.offset_right = 336
-	keys.offset_top = -142
-	keys.offset_bottom = -18
-	game_area.add_child(keys)
+	keys.offset_left = 12
+	keys.offset_right = 12 + 340
+	keys.offset_top = -12 - 124
+	keys.offset_bottom = -12
+	top_feed.add_child(keys)
 
-	# The network that played it.
-	var side := VBoxContainer.new()
-	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	side.add_theme_constant_override("separation", 0)
-	columns.add_child(side)
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
-	var tabs_margin := MarginContainer.new()
-	for edge in ["left", "right", "top"]:
-		tabs_margin.add_theme_constant_override("margin_" + edge, 12)
-	tabs_margin.add_child(tabs)
-	side.add_child(tabs_margin)
-	for key in ["actor", "critic"]:
-		var button := Button.new()
-		button.text = "Policy (what to do)" if key == "actor" else "Value (how it's going)"
-		button.toggle_mode = true
-		button.button_pressed = key == branch
-		button.focus_mode = Control.FOCUS_NONE
-		button.pressed.connect(func(): set_branch(key))
-		tabs.add_child(button)
-		branch_buttons[key] = button
+	# First-person feed, same world, the game's FPS camera settings and crosshair.
+	fps_feed = make_feed(top_feed.get_child(0))
+	screen.add_child(fps_feed)
+	fps_camera = Camera3D.new()
+	fps_camera.fov = 85.0
+	fps_camera.near = 0.04
+	fps_camera.cull_mask = FPS_CULL_MASK
+	fps_feed.get_child(0).add_child(fps_camera)
+	fps_camera.current = true
+	var crosshair := Label.new()
+	crosshair.text = "+"
+	crosshair.add_theme_font_size_override("font_size", 24)
+	crosshair.add_theme_color_override("font_shadow_color", Color.BLACK)
+	crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	crosshair.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	crosshair.grow_vertical = Control.GROW_DIRECTION_BOTH
+	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fps_feed.add_child(crosshair)
+
+	run = RunPanel.new()
+	screen.add_child(run)
 	brain = BrainView.new()
 	brain.archive = archive
 	brain.player_fields = PLAYER_SCRIPT.PLAYER_OBSERVATION_FIELDS
 	brain.enemy_fields = PLAYER_SCRIPT.ENEMY_OBSERVATION_FIELDS
-	brain.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	brain.input_hovered.connect(func(row: int):
 		highlight_row = row
 		overlay.queue_redraw())
-	side.add_child(brain)
-
-	# Transport and timeline.
-	var bar := HBoxContainer.new()
-	bar.add_theme_constant_override("separation", 8)
-	var bar_margin := MarginContainer.new()
-	for edge in ["left", "right", "top", "bottom"]:
-		bar_margin.add_theme_constant_override("margin_" + edge, 10)
-	bar_margin.add_child(bar)
-	layout.add_child(bar_margin)
-	var previous := Button.new()
-	previous.text = "Previous game"
-	previous.pressed.connect(func(): show_episode(current - 1))
-	bar.add_child(previous)
-	play_button = Button.new()
-	play_button.text = "Pause"
-	play_button.custom_minimum_size.x = 70
-	play_button.pressed.connect(func(): set_playing(not playing))
-	bar.add_child(play_button)
-	var following := Button.new()
-	following.text = "Next game"
-	following.pressed.connect(func(): show_episode(current + 1))
-	bar.add_child(following)
-	speed_button = Button.new()
-	speed_button.text = "1x"
-	speed_button.custom_minimum_size.x = 52
-	speed_button.pressed.connect(func():
-		speed_index = (speed_index + 1) % SPEEDS.size()
-		speed_button.text = str(SPEEDS[speed_index]) + "x")
-	bar.add_child(speed_button)
-	clock = Label.new()
-	clock.custom_minimum_size.x = 110
-	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bar.add_child(clock)
+	brain.branch_chosen.connect(set_branch)
+	screen.add_child(brain)
 	timeline = TimelineView.new()
-	timeline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	timeline.seek.connect(func(frame: float):
 		set_playing(false)
 		seek(frame))
-	bar.add_child(timeline)
-	var all := Button.new()
-	all.text = "All games"
-	all.pressed.connect(func(): show_progress())
-	bar.add_child(all)
-	for button in [previous, play_button, following, speed_button, all]:
-		button.focus_mode = Control.FOCUS_NONE
+	timeline.pressed.connect(on_bar)
+	screen.add_child(timeline)
 
 	progress = ProgressView.new()
 	progress.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -556,9 +593,31 @@ func make_ui() -> void:
 	folder_dialog.title = "Folder with downloaded training runs"
 	folder_dialog.dir_selected.connect(open_folder)
 	canvas.add_child(folder_dialog)
+	screen.resized.connect(arrange.bind(screen))
+	arrange(screen)
+
+func arrange(screen: Control) -> void:
+	# Split-screen layout: overhead feed on the left; first-person feed, run
+	# timer/splits and the network stacked on the right; transport along the bottom.
+	var w := screen.size.x
+	var h := screen.size.y
+	var bar_h := 34.0
+	var side := clampf(roundf(w * 0.32), 360.0, 580.0)
+	var left := w - side
+	var fps_h := roundf(side * 9.0 / 16.0)
+	var run_h: float = run.custom_minimum_size.y
+	_place(top_feed, Rect2(0, 0, left - GAP, h - bar_h - GAP))
+	_place(fps_feed, Rect2(left, 0, side, fps_h))
+	_place(run, Rect2(left, fps_h + GAP, side, run_h))
+	_place(brain, Rect2(left, fps_h + run_h + GAP * 2, side, h - bar_h - fps_h - run_h - GAP * 3))
+	_place(timeline, Rect2(0, h - bar_h, w, bar_h))
+
+static func _place(control: Control, rect: Rect2) -> void:
+	control.position = rect.position
+	control.size = rect.size
 
 func draw_highlight() -> void:
-	# Circles whatever the hovered row of "What it sees" describes.
+	# Brackets whatever the hovered input row describes, on the overhead feed.
 	if highlight_row < 0 or frames.is_empty() or camera == null:
 		return
 	var index := int(frame_position())
@@ -570,11 +629,14 @@ func draw_highlight() -> void:
 			return
 		target += Vector3(episode.observations[base + 1] * 32.0,
 			episode.observations[base + 2] * 64.0, episode.observations[base + 3] * 20.0)
-	var point := camera.unproject_position(target + Vector3.UP * 0.6)
-	overlay.draw_arc(point, 22.0, 0, TAU, 40, INK, 2.0, true)
-	var label := "You" if highlight_row == 0 else "Enemy %d" % highlight_row
-	overlay.draw_string(overlay.get_theme_default_font(), point + Vector2(26, 6), label,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, INK)
+	var point := camera.unproject_position(target + Vector3.UP * 0.6).round()
+	var box := Rect2(point - Vector2(16, 16), Vector2(32, 32))
+	for corner in [box.position, Vector2(box.end.x, box.position.y), box.end, Vector2(box.position.x, box.end.y)]:
+		var inward: Vector2 = (box.get_center() - corner).sign() * 8.0
+		overlay.draw_line(corner, corner + Vector2(inward.x, 0), Style.GOLD, 2.0)
+		overlay.draw_line(corner, corner + Vector2(0, inward.y), Style.GOLD, 2.0)
+	Style.text(overlay, box.position + Vector2(box.size.x + 8, 14), "YOU" if highlight_row == 0 else "ENEMY %d" % highlight_row,
+		16, Style.GOLD, true)
 
 # ---------------------------------------------------------------- check
 
@@ -619,8 +681,8 @@ func run_check(root: String) -> void:
 	for branch_name in ["critic", "actor"]:
 		set_branch(branch_name)
 		await get_tree().process_frame
-		for point in [Vector2(46, 120), Vector2(60, 200), Vector2(brain.size.x * 0.5, 200),
-				Vector2(brain.size.x - 150, brain.size.y * 0.4)]:
+		for point in [Vector2(20, 60), Vector2(40, 100), Vector2(brain.size.x * 0.55, 90),
+				Vector2(brain.size.x - 40, 80), Vector2(80, 16)]:
 			var motion := InputEventMouseMotion.new()
 			motion.position = point
 			brain._gui_input(motion)
@@ -630,6 +692,9 @@ func run_check(root: String) -> void:
 			click.pressed = true
 			brain._gui_input(click)
 			await get_tree().process_frame
+	for control in ["speed", "play", "play", "next", "previous"]:
+		on_bar(control)
+		await get_tree().process_frame
 	seek(frames.size() * 0.5)
 	highlight_row = 1
 	overlay.queue_redraw()

@@ -59,3 +59,9 @@ https://github.com/edbeeching/godot_rl_agents_plugin
 MIT license: addons/godot_rl_agents/LICENSE
 Source revision: 998c357a0cd09b37f40a36d70c7867fc9f682338
 The addon is vendored unchanged; project-specific training scripts are in training/.
+
+REPLAY VIEWER FONT
+Silkscreen by Jason Kottke and the Silkscreen Project Authors
+https://github.com/googlefonts/silkscreen (files from github.com/google/fonts)
+SIL Open Font License 1.1: fonts/silkscreen/OFL.txt
+Used unmodified for the training replay overlay.

@@ -130,43 +130,40 @@ screen or the notebook's plot across many games.
 
 ## Watching recorded games
 
-![Replay with the policy network](../docs/screenshots/replay_policy.png)
+![Replay overlay with the policy network](../docs/screenshots/replay_policy.png)
 
-These screenshots come from untrained wiring-check recordings, not a trained survivor.
-The value network view and the progress screen:
-
-![Replay with the value network](../docs/screenshots/replay_value.png)
-![Training progress screen](../docs/screenshots/replay_progress.png)
+Screenshots come from untrained wiring-check recordings, not a trained survivor.
 
 Copy the downloaded `ppo` folder into `training/runs/` (or anywhere), open
-`training/replay.tscn` in the editor and press **F6**. The viewer opens the last game
-you watched, or the newest one. **All games** (or Tab) shows every recorded game in
-training order: survival time, kills or reward against training steps, with a
-rolling average. Click a dot to watch that game. **Open folder…** picks another
-download location; the choice is remembered.
+`training/replay.tscn` in the editor and press **F6**. Each training episode is an
+**attempt**, shown like a speedrun:
 
-The game view uses the original rooftop, city, characters and gun, seen from the
-same overhead camera, with the same HUD as the game. Bottom left shows what the
-network pressed, drawn as the controls a player would use (ZQSD, Space, R, the
-mouse button and the aim direction). Movement is analog, so the stick shows the
-exact vector and the keys light up in proportion.
+- **Overhead feed** (left): the original rooftop, city, characters and gun from the
+  game's overhead camera, with the game's own HUD. Bottom left is an input display
+  of what the network pressed: ZQSD (lit in proportion, since movement is analog),
+  Space, R, the mouse button, plus a stick for the exact movement and a dial for the aim.
+- **First-person feed** (top right): the same moment through the game's FPS camera,
+  with the survivor's arms on the rifle, looking where the network aims.
+- **Run panel**: attempt number, how far training had got, a run timer (green while
+  alive, red on death, gold for surviving the round) and kill splits compared with
+  the best attempt so far (most kills), in green when faster and red when slower.
+- **Network**: POLICY shows the action network, VALUE the critic. INPUT is the 586
+  numbers it sees, one row for the survivor and one per enemy, nearest first;
+  L1 and L2 are the two 128-neuron layers; the meters on the right are what it
+  wanted, with a white tick for what was actually sent. Warm is positive, cold is
+  negative. Hover anything to read its name and value; hovering an enemy row
+  brackets that enemy on the overhead feed. Click a neuron to outline the inputs
+  that drove it. The strip below is the critic's value across the attempt.
+- **Bottom bar**: previous / play / next attempt, speed, and the attempt's track
+  (gold ticks for kills, red for hits taken; click or drag to seek).
+- **ATTEMPTS** (or Tab): every attempt in training order, by time, kills or reward,
+  with a running average. Click one to watch it. OPEN FOLDER picks another download.
 
-The right panel shows the network at the current decision:
-
-- **What it sees**: the 586 inputs as rows, the survivor first and then the 18
-  enemy slots, nearest first. Hover a square for its name and value; hovering a
-  row circles that enemy (or you) in the game view.
-- **Layer 1 / Layer 2**: the 128 neurons of each hidden layer.
-- **Decision**: the action means, and the value after sampling/clipping that was
-  actually sent to the game. The **Value** tab shows the critic instead.
-- Lines are the strongest contributions (input × weight) at that moment. Click a
-  neuron to see everything feeding it and where it sends its signal.
-
-Orange is positive, blue negative, brighter is stronger. The timeline shows health,
-the critic's value estimate and kills; click or drag to seek.
+![Value network](../docs/screenshots/replay_value.png)
+![Attempts screen](../docs/screenshots/replay_progress.png)
 
 Keys: Space play/pause, Left/Right one decision (Shift: one second), Home/End,
-Page Up/Page Down previous/next game, 1/2 policy/value, Tab all games.
+Page Up/Page Down previous/next attempt, 1/2 policy/value, Tab attempts.
 
 The viewer recomputes every activation in GDScript from the weights that made
 that decision. If they don't reproduce the value/log-probability recorded live,
