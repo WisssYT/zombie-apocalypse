@@ -196,14 +196,17 @@ Copy the downloaded `ppo` folder into `training/runs/` (or anywhere), open
 ### Saving a video
 
 SAVE VIDEO renders the attempt you are watching to `training/videos/attempt-N.avi`
-(1920x1080, 60 fps) in a second Godot window, using Godot's Movie Maker so every
+(1280x720, 30 fps) in a second Godot window, using Godot's Movie Maker so every
 frame is captured even if your PC can't render it in real time. The same from a
-terminal:
+terminal (attempt 12):
 
 ```bash
-godot --path . --write-movie training/videos/attempt-12.avi --resolution 1920x1080 \
-  res://training/replay.tscn -- --run=training/runs/ppo --episode=12 --video
+godot --path . res://training/replay.tscn -- --run=training/runs/ppo --episode=12 --save-video
 ```
+
+Movie Maker takes its size from project settings, not `--resolution`, so the viewer
+passes it through a one-off `override.cfg` that the renderer deletes as soon as it
+starts; the frame rate is passed as `--fixed-fps 30`.
 
 The AVI (MJPEG) is large; YouTube accepts it, or shrink it with
 `ffmpeg -i attempt-12.avi -c:v libx264 -crf 18 attempt-12.mp4`. Replays have no sound.

@@ -47,16 +47,20 @@ func _layout() -> void:
 	var out_w := label_w + 56.0
 	var columns := maxi(player_fields.size(), ENEMY_FIELDS)
 	var step := clampf(floorf((w - 24.0 - out_w - 34.0) / (columns + 16)), 4.0, 10.0)
-	var top := 64.0
+	var top := 58.0
 	var grid_h := 19 * step + 3.0
+	# Output rows shrink on short panels so the value strip always fits below.
+	var row_h := clampf(floorf((size.y - top - 60.0) / 7.0), 14.0, 20.0)
+	var content_bottom := top + maxf(grid_h, (grid_h + 7.0 * row_h) * 0.5)
 	var x0 := 12.0
 	var l1 := x0 + columns * step + 12.0
 	var l2 := l1 + 8 * step + 10.0
 	var out := l2 + 8 * step + 14.0
 	lay = {"step": step, "top": top, "grid_h": grid_h, "x": [x0, l1, l2, out], "label_w": label_w,
-		"layer_y": top + (grid_h - 16 * step) * 0.5, "out_w": w - out - 12.0,
-		"spark": Rect2(12, maxf(top + grid_h + 64, size.y - 40), w - 24, 26),
-		"hover_y": maxf(top + grid_h + 30, size.y - 66)}
+		"layer_y": top + (grid_h - 16 * step) * 0.5, "out_w": w - out - 12.0, "row_h": row_h,
+		"spark": Rect2(12, maxf(content_bottom + 30.0, size.y - 40.0), w - 24, 26)}
+	# Hover/warning text shares the strip's label line, so small panels still fit.
+	lay["hover_y"] = lay.spark.position.y - 8.0
 
 func cell(column: int, index: int) -> Rect2:
 	var step: float = lay.step
@@ -67,7 +71,7 @@ func cell(column: int, index: int) -> Rect2:
 	if column < 3:
 		return Rect2(lay.x[column] + (index % 8) * step, lay.layer_y + (index / 8) * step, step - 1, step - 1)
 	var count: int = result.layers[3].size()
-	var row_h := 20.0
+	var row_h: float = lay.row_h
 	var y: float = lay.top + (lay.grid_h - count * row_h) * 0.5 + index * row_h
 	return Rect2(lay.x[3], y, lay.out_w, row_h - 3)
 
@@ -120,7 +124,8 @@ func _draw() -> void:
 
 func _draw_value_strip() -> void:
 	var strip: Rect2 = lay.spark
-	Style.text(self, strip.position - Vector2(0, 8), "VALUE", 16, Style.DIM)
+	if hovered.x < 0 and note == "":
+		Style.text(self, strip.position - Vector2(0, 8), "VALUE", 16, Style.DIM)
 	draw_rect(strip, Style.ZERO)
 	if values.size() < 2:
 		return
@@ -138,7 +143,8 @@ func _draw_value_strip() -> void:
 	var x := strip.position.x + strip.size.x * clampf(head / float(values.size()), 0.0, 1.0)
 	draw_line(Vector2(x, strip.position.y), Vector2(x, strip.end.y), Style.TEXT, 1.0)
 	var i := clampi(int(head), 0, values.size() - 1)
-	Style.text(self, Vector2(strip.end.x, strip.position.y - 8), "%+.2f" % values[i], 16, Style.TEXT, false, HORIZONTAL_ALIGNMENT_RIGHT)
+	if hovered.x < 0 and note == "":
+		Style.text(self, Vector2(strip.end.x, strip.position.y - 8), "%+.2f" % values[i], 16, Style.TEXT, false, HORIZONTAL_ALIGNMENT_RIGHT)
 
 func _strongest_sources(column: int, index: int) -> Array:
 	var layer := column - 1

@@ -20,15 +20,17 @@ const ProgressView := preload("res://training/progress_view.gd")
 const SETTINGS := "user://replay_viewer.cfg"
 # Movie Maker sizes the video from the project's window settings at startup and
 # ignores --resolution, so a video render gets them from a one-off override.cfg
-# that the renderer deletes as soon as it has started.
+# that the renderer deletes as soon as it has started. The frame rate is passed as
+# --fixed-fps, which (unlike the movie_writer/fps setting) it does honour.
 const VIDEO_OVERRIDE := "res://override.cfg"
 const VIDEO_OVERRIDE_TEXT := """; Written by the replay viewer for one video render; deleted when it starts.
 [display]
-window/size/viewport_width=1920
-window/size/viewport_height=1080
-window/size/window_width_override=1920
-window/size/window_height_override=1080
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
 """
+const VIDEO_FPS := 30
 const SPEEDS := [0.25, 0.5, 1.0, 2.0, 4.0]
 const SPEED_LABELS := [".25X", ".5X", "1X", "2X", "4X"]
 # Same layers as the game: the body is hidden from the first-person camera,
@@ -507,7 +509,7 @@ func on_bar(control: String) -> void:
 			save_video()
 
 ## Renders the current attempt to training/videos/ in a separate Godot process,
-## using Movie Maker so every frame is captured at a steady 60 fps.
+## using Movie Maker so every frame is captured: 1280x720 at a steady 30 fps.
 func save_video() -> void:
 	if current < 0 or video_pid > 0:
 		return
@@ -520,7 +522,7 @@ func save_video() -> void:
 	override.close()
 	video_pid = OS.create_process(OS.get_executable_path(), PackedStringArray([
 		"--path", ProjectSettings.globalize_path("res://"), "--write-movie", video_path,
-		"res://training/replay.tscn", "--", "--run=" + archive.root,
+		"--fixed-fps", str(VIDEO_FPS), "res://training/replay.tscn", "--", "--run=" + archive.root,
 		"--episode=%d" % (current + 1), "--video"]))
 	if video_pid < 0:
 		remove_video_override()
