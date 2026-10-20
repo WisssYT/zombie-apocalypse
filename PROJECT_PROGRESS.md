@@ -45,7 +45,7 @@ an intelligent player: without commands, the player stays still and does not sho
 - Fullscreen was disabled in the project settings; the game now uses the default
   windowed mode.
 - In Godot, select `Player _ CharacterBody3D` in the scene to find the exported
-  **Ai Controlled**, **Ai Aim Degrees** and **Debug Observations** properties.
+  **Ai Controlled**, **Ai Cursor Max Speed/Acceleration** and **Debug Observations** properties.
 
 ## Existing game
 
@@ -86,7 +86,8 @@ These fields are in `player___character_body_3d.gd`:
 | --- | --- |
 | `ai_controlled` | Choose code inputs instead of human controls. Defaults to false. |
 | `ai_move` | `Vector2` movement in world X/Z, limited to length 1. |
-| `ai_aim_degrees` | Requested aiming angle in degrees. |
+| `ai_mouse` | `Vector2` mouse push, limited to length 1; moves the AI's cursor. |
+| `ai_cursor_max_speed`, `ai_cursor_acceleration` | Human-like cursor limits (60 units/s, 600 units/s²). |
 | `ai_shoot` | Hold shooting while true. |
 | `ai_reload_requested` | Request one reload; consumed on the next physics tick. |
 | `ai_dash_requested` | Request one dash; consumed on the next physics tick. |
@@ -94,9 +95,11 @@ These fields are in `player___character_body_3d.gd`:
 Movement convention: `Vector2(1, 0)` means world +X;
 `Vector2(0, -1)` means world -Z. Movement and aim are independent.
 
-Aiming convention: 0 degrees is +X; 90 degrees is -Z; 180 degrees is -X.
-Any angle is supported, including 48 degrees. The gun directly adopts the requested
-angle; human-like turn-rate smoothing has not been added.
+Aiming follows human rules: the AI moves a virtual mouse cursor and the gun points
+at it, exactly like `aim_at_mouse()`. Mouse right is world +X, down is world +Z.
+The cursor's speed (60 units/s) and acceleration (about 0.1 s to full speed) are
+capped, it stays inside the overhead view, and it does not follow the player, just
+like a real cursor. Aim therefore turns continuously and can never snap.
 
 In AI mode:
 
@@ -110,15 +113,15 @@ In AI mode:
 
 The F2 toggle was removed. There is no in-game console or keyboard AI toggle.
 The training controller's `set_action()` now receives a seven-value continuous action:
-move X/Z, aim X/Z, shoot, reload and dash. It converts the aim vector to the existing
-angle field. The normal player script still holds the input variables listed above.
+move X/Z, mouse X/Z, shoot, reload and dash. The mouse values set `ai_mouse`.
+The normal player script still holds the input variables listed above.
 
 ## Observations implemented
 
-`get_observation()` returns a fixed array of **586 floats**:
+`get_observation()` returns a fixed array of **590 floats**:
 
 ```text
-28 player values + 18 enemy slots x 31 values = 586
+32 player values + 18 enemy slots x 31 values = 590
 ```
 
 The array is a snapshot when called. It does not change gameplay or make decisions.
@@ -148,7 +151,7 @@ ragdoll hips velocity without changing the physics.
 
 See [AI_OBSERVATIONS.md](AI_OBSERVATIONS.md) for exact field order, indices and scales.
 That schema replaces the earlier 5-value and 149-value versions. A future trainer
-must use the current 586-value layout. Slot identity can change as distance order changes.
+must use the current 590-value layout (schema v3, with the AI's cursor). Slot identity can change as distance order changes.
 
 ### Debug output
 
@@ -193,12 +196,16 @@ References:
    60 Hz ticks. Re-run `training/smoke_test.py` after pipeline changes.
 2. Run `training/zombie_training.ipynb` on Kaggle/Colab. The connection and replay
    checks pass on Linux (Godot 4.6.3) locally; the notebook itself is untested in the cloud.
-3. Run a short PPO experiment in the notebook. Initial reward is +0.05 per second,
+3. Implemented since: collision/fall statistics (zombie collisions, hound
+   knockdowns, trips, falls off the building; counted, not rewarded), noise-free
+   evaluation (`training/evaluate.py`, also run by the notebook), visible exploration
+   noise per attempt, and replay-to-video (SAVE VIDEO in the viewer, Godot Movie Maker).
+4. Run a short PPO experiment in the notebook. Initial reward is +0.05 per second,
    +2 per kill, -0.02 per health point lost and -2 on death. Separate hit/damage-dealt
-   rewards and collision telemetry are not implemented. Tune using actual behavior.
-4. Save/resume checkpoints and evaluate on new spawn sequences. Track survival,
-   kills, damage and ammo use; add collision statistics for the YouTube experiment.
-5. Benchmark 1, 2, 4, 8 and more instances before choosing a count. Only one process
+   rewards are not implemented; collisions/falls are counted but not rewarded.
+   Tune using actual behavior seen in replays and noise-free evaluations.
+5. Track damage and ammo use as well; save/resume and evaluation already exist.
+6. Benchmark 1, 2, 4, 8 and more instances before choosing a count. Only one process
    is supported by the current adapter; 100 instances is not assumed feasible on
    a notebook runtime. Keep whichever count produces the best overall throughput.
 

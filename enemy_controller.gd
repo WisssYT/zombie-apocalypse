@@ -172,6 +172,7 @@ func _physics_process(delta: float) -> void:
 		play_clip("Attack", 1.7)
 	update_marker()
 	if global_position.y < -16.0:
+		report("fell_off")
 		queue_free()
 
 func steer_toward(target: Vector3, delta: float) -> void:
@@ -191,7 +192,8 @@ func steer_toward(target: Vector3, delta: float) -> void:
 		balance_stress = maxf(0.0, balance_stress - 4.0 * delta)
 	if balance_stress > 0.65:
 		if absf(error) > 1.85:
-			knock_down(momentum * 0.75, 1.6)
+			if knock_down(momentum * 0.75, 1.6):
+				report("tripped")
 		else:
 			state = "skid"
 			state_time = 0.85
@@ -280,7 +282,8 @@ func handle_enemy_collisions(incoming: Vector3) -> void:
 		if other.dead or other.climbing:
 			continue
 		if is_hound and state == "charge" and not other.is_hound:
-			other.knock_down(incoming * 0.7 + other.momentum * 0.25, 2.1)
+			if other.knock_down(incoming * 0.7 + other.momentum * 0.25, 2.1):
+				report("hound_knockdown")
 			continue
 		if is_hound or other.is_hound or state != "chase":
 			continue
@@ -288,13 +291,15 @@ func handle_enemy_collisions(incoming: Vector3) -> void:
 		var relative_speed: float = (incoming - other.momentum).length()
 		if incoming.length() >= 4.2 and relative_speed >= 3.0:
 			var impact: Vector3 = incoming * -0.45 + other.momentum * 0.25
-			other.knock_down(incoming * 0.6 + other.momentum * 0.3, 1.9)
-			knock_down(impact, 1.9)
+			var other_fell: bool = other.knock_down(incoming * 0.6 + other.momentum * 0.3, 1.9)
+			var self_fell := knock_down(impact, 1.9)
+			if other_fell or self_fell:
+				report("collision")
 			break
 
-func knock_down(launch: Vector3, duration := 1.9) -> void:
+func knock_down(launch: Vector3, duration := 1.9) -> bool:
 	if dead or climbing or state == "fallen" or collision_stumble_cooldown > 0.0:
-		return
+		return false
 	state = "fallen"
 	state_time = duration
 	balance_stress = 0.0
@@ -303,6 +308,13 @@ func knock_down(launch: Vector3, duration := 1.9) -> void:
 	momentum = launch.limit_length(10.0)
 	# Creating physics bodies is deferred until the current collision step finishes.
 	start_ragdoll.call_deferred(momentum)
+	return true
+
+# Statistics only (collisions, falls); never changes what enemies do.
+func report(event: String) -> void:
+	var scene := get_tree().current_scene
+	if scene and scene.has_method("register_event"):
+		scene.register_event(event)
 
 func start_ragdoll(launch: Vector3) -> void:
 	if is_instance_valid(ragdoll):
@@ -327,6 +339,7 @@ func update_ragdoll_recovery(delta: float) -> void:
 	var center: Vector3 = ragdoll.center()
 	global_position = center + Vector3.UP * 0.4
 	if center.y < -16.0:
+		report("fell_off")
 		queue_free()
 		return
 	if state_time > 0.0:

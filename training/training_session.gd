@@ -39,6 +39,9 @@ func register_kill() -> void:
 	# Enemies report kills through current_scene, which is the persistent trainer.
 	game.register_kill()
 
+func register_event(event: String) -> void:
+	game.register_event(event)
+
 func freeze_episode() -> void:
 	for child in get_children():
 		if child != controller and child != $Sync:

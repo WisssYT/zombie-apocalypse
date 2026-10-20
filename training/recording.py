@@ -31,7 +31,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 import torch
 
 FORMAT = 2
-OBSERVATION_SIZE = 586
+OBSERVATION_SIZE = 590
 ACTION_SIZE = 7
 HIDDEN = 128
 # Every matrix is stored input-major (in x out), the order the viewer multiplies in.
@@ -82,7 +82,7 @@ class EpisodeRecorder(gym.Wrapper):
     because a long episode can cross several PPO updates.
     """
 
-    def __init__(self, env, output, *, label="PPO training"):
+    def __init__(self, env, output, *, label="PPO training", mode="training"):
         super().__init__(env)
         tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
         self.directory = Path(output) / "replays" / tag
@@ -102,7 +102,9 @@ class EpisodeRecorder(gym.Wrapper):
         self.env.unwrapped.enable_replay()
         write_json(self.directory / "manifest.json", {
             "format": FORMAT, "session": tag, "label": label,
-            "observation_schema": 2, "observation_size": OBSERVATION_SIZE,
+            # training: actions sampled with exploration noise; evaluation: noise off.
+            "mode": mode,
+            "observation_schema": 3, "observation_size": OBSERVATION_SIZE,
             "action_size": ACTION_SIZE, "decision_hz": 15, "activation": "tanh",
             "policy_layout": [{"name": n, "shape": s} for n, s in POLICY_LAYOUT],
             "python": platform.python_version(), "torch": torch.__version__,
@@ -214,6 +216,8 @@ class EpisodeRecorder(gym.Wrapper):
             "id": identifier, "status": status, "steps": len(episode["actions"]),
             "seconds": final["time"], "kills": final["kills"], "health": final["health"],
             "reward": float(sum(episode["rewards"])),
+            "collisions": final["stats"]["collision"] + final["stats"]["hound_knockdown"],
+            "tripped": final["stats"]["tripped"], "fell_off": final["stats"]["fell_off"],
             "timestep": episode["timestep_end"],
             "bytes": sum(target.with_suffix(s).stat().st_size for s in (".bin.gz", ".json.gz")),
         }

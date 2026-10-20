@@ -1,14 +1,14 @@
-# AI observations - schema v2
+# AI observations - schema v3
 
-`get_observation()` returns 586 floats: 28 player fields, then 18 enemy slots
+`get_observation()` returns 590 floats: 32 player fields, then 18 enemy slots
 with 31 fields each. Slot order is nearest first by 3D distance, with instance ID
 as the tie breaker. Empty slots are all zero; dead enemies leave the group.
 All living enemies are observable, including hidden wall climbers.
 
 Each field below is listed in its exact array order, starting at zero. Use
-`28 + slot * 31 + enemy_field_index` to find an enemy value in the flat array.
+`32 + slot * 31 + enemy_field_index` to find an enemy value in the flat array.
 Names are also available in PLAYER_OBSERVATION_FIELDS and ENEMY_OBSERVATION_FIELDS.
-This replaces the previous 149-value schema; a future trainer must use this layout.
+This replaces schema v2 (586 values, no cursor) and the earlier 149-value schema.
 
 ## Player fields
 
@@ -40,6 +40,10 @@ This replaces the previous 149-value schema; a future trainer must use this layo
 25. `edge_positive_x`
 26. `edge_negative_z`
 27. `edge_positive_z`
+28. `cursor_x`
+29. `cursor_z`
+30. `cursor_velocity_x`
+31. `cursor_velocity_z`
 
 ## Fields in each enemy slot
 
@@ -89,6 +93,9 @@ direction components; aim is the actual weapon direction, not the requested angl
 Climbing velocity is calculated from the existing climb path; fallen velocity is
 read from the existing ragdoll hips when available. Other enemies use momentum X/Z
 and body velocity Y.
+
+The cursor is the AI's virtual mouse pointer on the aim plane: position relative
+to the player on the enemy scales (32/20), velocity divided by `ai_cursor_max_speed`.
 
 Edge distances are signed distance to the four arena bounds (-16/+16 X, -10/+10 Z),
 divided by full arena width/depth (32/20). Zero means on the edge, negative outside.

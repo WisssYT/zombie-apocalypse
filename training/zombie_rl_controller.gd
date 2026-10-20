@@ -67,7 +67,7 @@ func get_reward() -> float:
 	return reward
 
 func get_action_space() -> Dictionary:
-	# move X/Z, aim X/Z, shoot, reload, dash. One continuous Box for SB3.
+	# move X/Z, mouse X/Z, shoot, reload, dash. One continuous Box for SB3.
 	return {"controls": {"size": 7, "action_type": "continuous"}}
 
 func set_action(action) -> void:
@@ -82,9 +82,7 @@ func set_action(action) -> void:
 			push_error("Action values must be finite")
 			return
 	_player.ai_move = Vector2(values[0], values[1]).limit_length(1.0)
-	var aim := Vector2(values[2], values[3])
-	if aim.length_squared() > 0.000001:
-		_player.ai_aim_degrees = rad_to_deg(atan2(-aim.y, aim.x))
+	_player.ai_mouse = Vector2(values[2], values[3]).limit_length(1.0)
 	_player.ai_shoot = float(values[4]) > 0.0
 	_player.ai_reload_requested = float(values[5]) > 0.0
 	_player.ai_dash_requested = float(values[6]) > 0.0
@@ -98,6 +96,8 @@ func get_info() -> Dictionary:
 		"ammo": _player.ammo_in_magazine, "reserve": _player.reserve_ammo,
 		"reloading": _player.reloading, "dashing": _player.dash_time_left > 0,
 		"episode_return": episode_return, "episode_index": get_parent().episode_index,
+		"collisions": game.stats.collision, "hound_knockdowns": game.stats.hound_knockdown,
+		"tripped": game.stats.tripped, "fell_off": game.stats.fell_off,
 		"position": [_player.position.x, _player.position.y, _player.position.z]
 	}
 	if replay_enabled:

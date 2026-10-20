@@ -9,6 +9,8 @@ var spawn_number := 0
 var spawn_countdown := 1.0
 var elapsed := 0.0
 var kills := 0
+# Counted for the YouTube experiment; reported by enemy_controller.gd.
+var stats := {"collision": 0, "hound_knockdown": 0, "tripped": 0, "fell_off": 0}
 var rng := RandomNumberGenerator.new()
 var hud: Label
 var health_bar: ProgressBar
@@ -48,7 +50,7 @@ func _physics_process(delta: float) -> void:
 			spawn_countdown = maxf(1.4, 3.5 - elapsed / 90.0)
 		var ammo_text := "RELOADING..." if player.reloading else "AMMO %d / %d" % [player.ammo_in_magazine, player.reserve_ammo]
 		var dash_text := "READY" if player.dash_cooldown_left <= 0.0 else "%.1fs" % player.dash_cooldown_left
-		hud.text = "HEALTH %d / 100 | Kills: %d\n%s | R: reload\nDASH %s | Space: dodge\nSurvived: %ds | C: change view\nZQSD + mouse | Esc: release cursor" % [int(player.health), kills, ammo_text, dash_text, int(elapsed)]
+		hud.text = "HEALTH %d / 100 | Kills: %d\n%s | R: reload\nDASH %s | Space: dodge\nSurvived: %ds | C: change view\nZQSD + mouse | Esc: release cursor\nCollisions: %d | Fell off: %d" % [int(player.health), kills, ammo_text, dash_text, int(elapsed), stats.collision + stats.hound_knockdown, stats.fell_off]
 	health_bar.value = player.health
 
 func spawn_zombie() -> Node3D:
@@ -103,5 +105,8 @@ func hidden_from_overhead(center: Vector3, outward: Vector3) -> bool:
 
 func register_kill() -> void:
 	kills += 1
+
+func register_event(event: String) -> void:
+	stats[event] = stats.get(event, 0) + 1
 
 

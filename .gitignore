@@ -6,4 +6,7 @@
 .venv/
 __pycache__/
 training/runs/
+training/videos/
 training/builds/
+# Written by the replay viewer during a video render
+override.cfg

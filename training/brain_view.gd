@@ -1,5 +1,5 @@
 extends Control
-## The network at the current decision, drawn like an LED panel: the 586 inputs
+## The network at the current decision, drawn like an LED panel: the 590 inputs
 ## (a row for the survivor, then one per enemy, nearest first), both hidden
 ## layers as 16x8 blocks, and the outputs as meters. Click a neuron to outline
 ## the inputs that drove it.
@@ -8,9 +8,9 @@ signal input_hovered(row: int)  # -1 none, 0 survivor, 1-18 enemy rows
 signal branch_chosen(branch: String)
 
 const Style := preload("res://training/replay_style.gd")
-const ACTIONS := ["MOVE X", "MOVE Z", "AIM X", "AIM Z", "FIRE", "RELOAD", "DASH"]
-const PLAYER_FIELDS := 28
+const ACTIONS := ["MOVE X", "MOVE Z", "MOUSE X", "MOUSE Z", "FIRE", "RELOAD", "DASH"]
 const ENEMY_FIELDS := 31
+const SLOTS := 18
 const TRACE := 8
 const TAB_SPLIT := 120.0
 
@@ -45,11 +45,12 @@ func _layout() -> void:
 	var w := size.x
 	var label_w := Style.width_of("RELOAD") + 10.0
 	var out_w := label_w + 56.0
-	var step := clampf(floorf((w - 24.0 - out_w - 34.0) / (ENEMY_FIELDS + 16)), 4.0, 10.0)
+	var columns := maxi(player_fields.size(), ENEMY_FIELDS)
+	var step := clampf(floorf((w - 24.0 - out_w - 34.0) / (columns + 16)), 4.0, 10.0)
 	var top := 64.0
 	var grid_h := 19 * step + 3.0
 	var x0 := 12.0
-	var l1 := x0 + ENEMY_FIELDS * step + 12.0
+	var l1 := x0 + columns * step + 12.0
 	var l2 := l1 + 8 * step + 10.0
 	var out := l2 + 8 * step + 14.0
 	lay = {"step": step, "top": top, "grid_h": grid_h, "x": [x0, l1, l2, out], "label_w": label_w,
@@ -60,8 +61,8 @@ func _layout() -> void:
 func cell(column: int, index: int) -> Rect2:
 	var step: float = lay.step
 	if column == 0:
-		var row := 0 if index < PLAYER_FIELDS else (index - PLAYER_FIELDS) / ENEMY_FIELDS + 1
-		var col := index if index < PLAYER_FIELDS else (index - PLAYER_FIELDS) % ENEMY_FIELDS
+		var row := 0 if index < player_fields.size() else (index - player_fields.size()) / ENEMY_FIELDS + 1
+		var col := index if index < player_fields.size() else (index - player_fields.size()) % ENEMY_FIELDS
 		return Rect2(lay.x[0] + col * step, lay.top + row * step + (3.0 if row > 0 else 0.0), step - 1, step - 1)
 	if column < 3:
 		return Rect2(lay.x[column] + (index % 8) * step, lay.layer_y + (index / 8) * step, step - 1, step - 1)
@@ -84,8 +85,8 @@ func _draw() -> void:
 	Style.text(self, Vector2(lay.x[2], lay.layer_y - 8), "L2", 16, Style.DIM)
 	var layers: Array = result.layers
 	var inputs: PackedFloat32Array = layers[0]
-	for i in 586:
-		var slot_present := i < PLAYER_FIELDS or inputs[PLAYER_FIELDS + (i - PLAYER_FIELDS) / ENEMY_FIELDS * ENEMY_FIELDS] != 0.0
+	for i in player_fields.size() + SLOTS * ENEMY_FIELDS:
+		var slot_present := i < player_fields.size() or inputs[player_fields.size() + (i - player_fields.size()) / ENEMY_FIELDS * ENEMY_FIELDS] != 0.0
 		draw_rect(cell(0, i), Style.led(inputs[i]) if slot_present else Color(Style.ZERO, 0.5))
 	for column in [1, 2]:
 		var activations: PackedFloat32Array = layers[column]
@@ -153,11 +154,11 @@ func _describe(mark: Vector2i) -> String:
 	var value: float = result.layers[mark.x][mark.y]
 	if mark.x == 0:
 		var name: String
-		if mark.y < PLAYER_FIELDS:
+		if mark.y < player_fields.size():
 			name = "YOU  " + str(player_fields[mark.y])
 		else:
-			var slot := (mark.y - PLAYER_FIELDS) / ENEMY_FIELDS + 1
-			name = "ENEMY %d  %s" % [slot, enemy_fields[(mark.y - PLAYER_FIELDS) % ENEMY_FIELDS]]
+			var slot := (mark.y - player_fields.size()) / ENEMY_FIELDS + 1
+			name = "ENEMY %d  %s" % [slot, enemy_fields[(mark.y - player_fields.size()) % ENEMY_FIELDS]]
 		return "%s  %+.3f" % [name.replace("_", " ").to_upper(), value]
 	if mark.x < 3:
 		return "L%d NEURON %d  %+.3f" % [mark.x, mark.y + 1, value]
@@ -169,7 +170,7 @@ func _hit(point: Vector2) -> Vector2i:
 	if result.is_empty() or lay.is_empty():
 		return Vector2i(-1, -1)
 	for column in 4:
-		var count: int = [586, 128, 128, result.layers[3].size()][column]
+		var count: int = [result.layers[0].size(), 128, 128, result.layers[3].size()][column]
 		for i in count:
 			if cell(column, i).grow(0.5).has_point(point):
 				return Vector2i(column, i)
@@ -182,7 +183,7 @@ func _gui_input(event: InputEvent) -> void:
 			hovered = hit
 			var row := -1
 			if hit.x == 0:
-				row = 0 if hit.y < PLAYER_FIELDS else (hit.y - PLAYER_FIELDS) / ENEMY_FIELDS + 1
+				row = 0 if hit.y < player_fields.size() else (hit.y - player_fields.size()) / ENEMY_FIELDS + 1
 			input_hovered.emit(row)
 			queue_redraw()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:

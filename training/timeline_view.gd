@@ -3,7 +3,7 @@ extends Control
 ## and kills, click or drag to seek) and the button for the attempts screen.
 
 signal seek(frame: float)
-signal pressed(control: String)  # previous, play, next, speed, attempts
+signal pressed(control: String)  # previous, play, next, speed, video, attempts
 
 const Style := preload("res://training/replay_style.gd")
 const BUTTON := 34.0
@@ -13,6 +13,7 @@ var head := 0.0
 var playing := true
 var speed := "1X"
 var hover := -1.0
+var message := ""
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(300, 34)
@@ -29,10 +30,10 @@ func set_episode(episode_frames: Array) -> void:
 func _regions() -> Dictionary:
 	return {"previous": Rect2(4, 0, BUTTON, size.y), "play": Rect2(4 + BUTTON, 0, BUTTON, size.y),
 		"next": Rect2(4 + BUTTON * 2, 0, BUTTON, size.y), "speed": Rect2(4 + BUTTON * 3, 0, 56, size.y),
-		"attempts": Rect2(size.x - 128, 0, 124, size.y)}
+		"video": Rect2(size.x - 288, 0, 156, size.y), "attempts": Rect2(size.x - 128, 0, 124, size.y)}
 
 func _track() -> Rect2:
-	return Rect2(BUTTON * 3 + 72, 11, size.x - BUTTON * 3 - 72 - 144, size.y - 22)
+	return Rect2(BUTTON * 3 + 72, 11, size.x - BUTTON * 3 - 72 - 304, size.y - 22)
 
 func _x(frame: float) -> float:
 	var track := _track()
@@ -55,6 +56,7 @@ func _draw() -> void:
 	draw_colored_polygon(PackedVector2Array([Vector2(c.x - 5, middle - 5), Vector2(c.x - 5, middle + 5), Vector2(c.x + 3, middle)]), Style.TEXT)
 	draw_rect(Rect2(c.x + 4, middle - 5, 2, 10), Style.TEXT)
 	Style.text(self, Vector2(r.speed.position.x, middle + 6), speed, 16, Style.TEXT, true, HORIZONTAL_ALIGNMENT_CENTER, r.speed.size.x)
+	Style.text(self, Vector2(r.video.position.x, middle + 6), "SAVE VIDEO", 16, Style.TEXT, true, HORIZONTAL_ALIGNMENT_CENTER, r.video.size.x)
 	Style.text(self, Vector2(r.attempts.position.x, middle + 6), "ATTEMPTS", 16, Style.TEXT, true, HORIZONTAL_ALIGNMENT_CENTER, r.attempts.size.x)
 	if frames.is_empty():
 		return
@@ -62,13 +64,23 @@ func _draw() -> void:
 	draw_rect(track, Style.ZERO)
 	var last := frames.size() - 1
 	draw_rect(Rect2(track.position, Vector2(_x(head) - track.position.x, track.size.y)), Color(Style.TEXT, 0.12))
-	# Gold: a kill. Red: a hit taken.
+	# Gold: a kill. Red: a hit taken. White: zombies collided. Cyan: one fell off.
 	for i in range(1, frames.size()):
+		var now: Dictionary = frames[i].get("stats", {})
+		var before: Dictionary = frames[i - 1].get("stats", {})
+		if now.get("collision", 0) + now.get("hound_knockdown", 0) > before.get("collision", 0) + before.get("hound_knockdown", 0):
+			draw_rect(Rect2(_x(i) - 1, track.position.y, 2, track.size.y * 0.5), Style.TEXT)
+		if now.get("fell_off", 0) > before.get("fell_off", 0):
+			draw_rect(Rect2(_x(i) - 1, track.position.y - 3, 2, track.size.y + 6), Style.OFF)
 		if frames[i].health < frames[i - 1].health:
 			draw_rect(Rect2(_x(i) - 1, track.position.y + track.size.y * 0.5, 2, track.size.y * 0.5), Style.BEHIND)
 		if frames[i].kills > frames[i - 1].kills:
 			draw_rect(Rect2(_x(i) - 1, track.position.y - 3, 2, track.size.y + 6), Style.GOLD)
 	draw_rect(Rect2(_x(head) - 1, track.position.y - 4, 2, track.size.y + 8), Style.TEXT)
+	if message != "":
+		var width := Style.width_of(message)
+		draw_rect(Rect2(track.end.x - width - 10, track.position.y - 1, width + 10, track.size.y + 2), Color("050505"))
+		Style.text(self, Vector2(track.end.x - 4, track.end.y - 1), message, 16, Style.GOLD, false, HORIZONTAL_ALIGNMENT_RIGHT)
 	if hover >= 0.0:
 		var i := clampi(int(round(hover)), 0, last)
 		var label := Style.clock(frames[i].time)

@@ -10,10 +10,11 @@ No successful survival agent has been trained yet. Local runs are wiring checks 
 
 - `../training.tscn`: persistent training scene; instances `game.tscn` for each round.
 - `training_session.gd`: seeded round creation/cleanup; keeps Sync/controller alive.
-- `zombie_rl_controller.gd`: 586 observations, seven action values, reward and endings.
+- `zombie_rl_controller.gd`: 590 observations, seven action values, reward and endings.
 - `training_sync.gd`: small subclass of the vendored Godot RL Agents Sync.
 - `zombie_env.py`: Gymnasium adapter for one Godot process on Windows/Linux.
-- `train.py`: PPO training, checkpoints, resume, time budget.
+- `train.py`: PPO training, checkpoints, resume, time budget, starting noise.
+- `evaluate.py`: plays a saved model with exploration noise off on unseen rounds.
 - `zombie_training.ipynb`: the Kaggle/Colab notebook (setup, checks, training, progress plot).
 - `recording.py`: writes every episode and one weight snapshot per PPO rollout.
 - `replay_format.py`: numpy-only reader and forward pass, used by tests and the notebook.
@@ -61,15 +62,19 @@ The action space is `Box(-1, 1, shape=(7,))`, in this order:
 | --- | --- |
 | 0 | Movement world X |
 | 1 | Movement world Z |
-| 2 | Aim world X |
-| 3 | Aim world Z |
+| 2 | Mouse movement, screen right (world +X) |
+| 3 | Mouse movement, screen down (world +Z) |
 | 4 | Shoot if positive |
 | 5 | Request reload if positive |
 | 6 | Request dash if positive |
 
-Movement length is capped at 1. Aim X/Z is converted to the player's existing
-`ai_aim_degrees`; a zero aim vector retains the last aim. This avoids wrapping a
-neural angle output across 0/360 degrees while keeping every aiming angle possible.
+Movement length is capped at 1. The AI aims the way a player does: it moves a
+virtual mouse cursor over the ground and the gun points at it, by the same rule as
+`aim_at_mouse()`. Actions 2-3 are how hard it pushes the mouse; cursor speed is capped
+at `ai_cursor_max_speed` (60 units/s) and builds up at `ai_cursor_acceleration`
+(600 units/s², about 0.1 s to full speed), so aim is continuous and can't snap.
+The cursor stays within the overhead view, and its position and speed are part of
+the observation (schema v3, 590 values).
 Shooting is held across physics ticks; reload/dash are one-shot requests per action.
 Sending another positive button value on the next decision is another request.
 Ammo, cooldowns, automatic empty-magazine reload, dash commitment and slowdown
@@ -124,6 +129,31 @@ python training/train.py --steps 2000000 --hours 11 --resume latest --output run
 - Checkpoints every 10,000 decisions in `checkpoints/`, `survivor.zip` at the end,
   Monitor CSVs per session, and the recordings in `replays/`.
 - Two 128-unit Tanh layers for the actor and two for the critic, `MlpPolicy`, CPU.
+- `--noise` (default 1.0) is the starting exploration noise: PPO adds random noise
+  with this standard deviation to every action so it keeps trying new things, then
+  learns how much noise to keep. The viewer shows the noise of each attempt.
+
+## Evaluation (noise off)
+
+Training games are noisy on purpose, so they understate what the network can do.
+`evaluate.py` plays a saved model with the noise off (always its most likely
+action) on rounds it never trained on, records them next to the training games and
+prints survival, kills, collisions and falls:
+
+```bash
+python training/evaluate.py --model latest --games 10 --output runs/ppo
+```
+
+Evaluation games appear in the viewer marked EVALUATION / NO NOISE, and as diamonds
+on the attempts screen (they are left out of the training average).
+
+## Collision and fall stats
+
+The game counts, per round: zombie-on-zombie collisions that knock someone down,
+hound charges that knock a zombie down, zombies tripping on tight turns, and enemies
+that fall off the building. They are not rewarded; they show whether the AI learns
+to make enemies collide or fall on its own. They appear in the training CSV, the
+episode index, the run panel and the attempts screen, and on the human HUD.
 
 Do not claim survival performance from a short run. Judge it from the progress
 screen or the notebook's plot across many games.
@@ -147,7 +177,7 @@ Copy the downloaded `ppo` folder into `training/runs/` (or anywhere), open
 - **Run panel**: attempt number, how far training had got, a run timer (green while
   alive, red on death, gold for surviving the round) and kill splits compared with
   the best attempt so far (most kills), in green when faster and red when slower.
-- **Network**: POLICY shows the action network, VALUE the critic. INPUT is the 586
+- **Network**: POLICY shows the action network, VALUE the critic. INPUT is the 590
   numbers it sees, one row for the survivor and one per enemy, nearest first;
   L1 and L2 are the two 128-neuron layers; the meters on the right are what it
   wanted, with a white tick for what was actually sent. Warm is positive, cold is
@@ -155,12 +185,29 @@ Copy the downloaded `ppo` folder into `training/runs/` (or anywhere), open
   brackets that enemy on the overhead feed. Click a neuron to outline the inputs
   that drove it. The strip below is the critic's value across the attempt.
 - **Bottom bar**: previous / play / next attempt, speed, and the attempt's track
-  (gold ticks for kills, red for hits taken; click or drag to seek).
+  (gold ticks for kills, red for hits taken, white for zombie collisions, cyan for
+  a zombie falling off; click or drag to seek). SAVE VIDEO renders the attempt.
 - **ATTEMPTS** (or Tab): every attempt in training order, by time, kills or reward,
   with a running average. Click one to watch it. OPEN FOLDER picks another download.
 
 ![Value network](../docs/screenshots/replay_value.png)
 ![Attempts screen](../docs/screenshots/replay_progress.png)
+
+### Saving a video
+
+SAVE VIDEO renders the attempt you are watching to `training/videos/attempt-N.avi`
+(1920x1080, 60 fps) in a second Godot window, using Godot's Movie Maker so every
+frame is captured even if your PC can't render it in real time. The same from a
+terminal:
+
+```bash
+godot --path . --write-movie training/videos/attempt-12.avi --resolution 1920x1080 \
+  res://training/replay.tscn -- --run=training/runs/ppo --episode=12 --video
+```
+
+The AVI (MJPEG) is large; YouTube accepts it, or shrink it with
+`ffmpeg -i attempt-12.avi -c:v libx264 -crf 18 attempt-12.mp4`. Replays have no sound.
+Rendering needs a graphics card or display, so make videos on your PC, not on Kaggle.
 
 Keys: Space play/pause, Left/Right one decision (Shift: one second), Home/End,
 Page Up/Page Down previous/next attempt, 1/2 policy/value, Tab attempts.
@@ -184,7 +231,8 @@ One folder per training session under `replays/`, so resumed runs never overwrit
   rewards, live values and log-probabilities.
 - `episodes/<id>.json.gz`: world samples (T+1), status, seed, training step range
   and which weight snapshot made each decision.
-- `index.json`: one summary row per game for the progress screen.
+- `index.json`: one summary row per game (time, kills, reward, collisions, falls) for the attempts screen.
+- `manifest.json` also says whether the session is `training` (noisy) or `evaluation`.
 
 Games are saved when they end, and partly after each rollout (`in_progress`, then
 `interrupted` if the session stops). A hard crash can lose decisions since the last

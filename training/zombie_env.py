@@ -17,7 +17,7 @@ import numpy as np
 from godot_rl.core.godot_env import GodotEnv
 
 PROJECT = Path(__file__).resolve().parents[1]
-OBSERVATION_SIZE = 586
+OBSERVATION_SIZE = 590
 DEFAULT_GODOT = (
     r"C:\Users\user\Downloads\Godot_v4.6.2-stable_win64.exe"
     r"\Godot_v4.6.2-stable_win64_console.exe"
@@ -163,7 +163,7 @@ class ZombieEnv(gym.Env):
     def _observation(self, raw):
         obs = np.asarray(raw[0]["obs"], dtype=np.float32)
         if not self.observation_space.contains(obs):
-            raise ValueError("Godot observation must be 586 finite floats in [-1,1]")
+            raise ValueError(f"Godot observation must be {OBSERVATION_SIZE} finite floats in [-1,1]")
         return obs
 
     def reset(self, *, seed=None, options=None):

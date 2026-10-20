@@ -1,7 +1,7 @@
 extends CharacterBody3D
 const BULLET_SCENE = preload("res://bullet.tscn")
 
-# Observation schema v2: 28 player values + 18 slots of 31 enemy values.
+# Observation schema v3: 32 player values + 18 slots of 31 enemy values.
 const MAX_OBSERVED_ENEMIES := 18
 const PLAYER_OBSERVATION_FIELDS := [
 	"health",
@@ -32,6 +32,10 @@ const PLAYER_OBSERVATION_FIELDS := [
 	"edge_positive_x",
 	"edge_negative_z",
 	"edge_positive_z",
+	"cursor_x",
+	"cursor_z",
+	"cursor_velocity_x",
+	"cursor_velocity_z",
 ]
 const ENEMY_OBSERVATION_FIELDS := [
 	"present",
@@ -75,7 +79,17 @@ const FPS_WEAPON_CANT := deg_to_rad(-20.0)
 
 @export var ai_controlled :=false
 var ai_move := Vector2.ZERO
-@export var ai_aim_degrees := 48.0
+# The AI aims like a person with a mouse: it moves a cursor over the ground and
+# the gun points at it, as aim_at_mouse() does. ai_mouse is how hard it pushes
+# the mouse (-1..1 per axis: right is world +X, down is world +Z). The cursor's
+# speed and acceleration are capped, so aim is continuous and can't snap.
+var ai_mouse := Vector2.ZERO
+@export var ai_cursor_max_speed := 60.0
+@export var ai_cursor_acceleration := 600.0
+var ai_cursor := Vector2.ZERO
+var ai_cursor_velocity := Vector2.ZERO
+# The cursor stays on screen: roughly the ground the overhead camera shows.
+const AI_CURSOR_BOUNDS := Rect2(-22.0, -16.0, 44.0, 32.0)
 @export var debug_observations := true
 var observation_print_cooldown := 0.0
 # Shooting is held; reload and dash requests are consumed once per physics tick.
@@ -133,6 +147,8 @@ var muzzle_rest: Transform3D
 var crosshair: Label
 
 func _ready() -> void:
+	var start_aim: Vector3 = -$WeaponPivot.global_basis.z
+	ai_cursor = Vector2(global_position.x + start_aim.x * 5.0, global_position.z + start_aim.z * 5.0)
 	gun_rest = gun_model.transform
 	muzzle_rest = muzzle_marker.transform
 	player_material = $MeshInstance3D.material_override.duplicate()
@@ -251,12 +267,7 @@ func _physics_process(delta: float) -> void:
 		update_fps_pose()
 	else:
 		if ai_controlled:
-			var angle := deg_to_rad(ai_aim_degrees)
-			var aim_direction := Vector3(cos(angle), 0, -sin(angle))
-			$WeaponPivot.look_at(
-				$WeaponPivot.global_position + aim_direction,
-				Vector3.UP
-			)
+			aim_at_ai_cursor(delta)
 		else:
 			aim_at_mouse()
 		fps_rig.rotation = Vector3(0, $WeaponPivot.rotation.y, 0)
@@ -315,6 +326,22 @@ func aim_at_mouse() -> void:
 		if $WeaponPivot.global_position.distance_to(target) > 0.01:
 			$WeaponPivot.look_at(target, Vector3.UP)
 			
+# Same rule as aim_at_mouse(), with the AI's cursor instead of the real one.
+func aim_at_ai_cursor(delta: float) -> void:
+	# Speed builds up and dies down like a hand on a mouse; no teleporting.
+	var wanted := ai_mouse.limit_length(1.0) * ai_cursor_max_speed
+	ai_cursor_velocity = ai_cursor_velocity.move_toward(wanted, ai_cursor_acceleration * delta)
+	ai_cursor += ai_cursor_velocity * delta
+	var on_screen := ai_cursor.clamp(AI_CURSOR_BOUNDS.position, AI_CURSOR_BOUNDS.end)
+	if on_screen.x != ai_cursor.x:
+		ai_cursor_velocity.x = 0.0
+	if on_screen.y != ai_cursor.y:
+		ai_cursor_velocity.y = 0.0
+	ai_cursor = on_screen
+	var target := Vector3(ai_cursor.x, $WeaponPivot.global_position.y, ai_cursor.y)
+	if $WeaponPivot.global_position.distance_to(target) > 0.01:
+		$WeaponPivot.look_at(target, Vector3.UP)
+
 func handle_shooting(delta: float) -> void:
 	shot_cooldown = maxf(0.0, shot_cooldown - delta)
 	if dash_time_left > 0.0:
@@ -431,6 +458,8 @@ func take_damage(amount: float) -> void:
 	if health <= 0.0:
 		dead = true
 		ai_move = Vector2.ZERO
+		ai_mouse = Vector2.ZERO
+		ai_cursor_velocity = Vector2.ZERO
 		ai_shoot = false
 		ai_reload_requested = false
 		ai_dash_requested = false
@@ -491,7 +520,12 @@ func get_player_observation() -> Array[float]:
 		observation_signed(global_position.x + 16.0, 32.0),
 		observation_signed(16.0 - global_position.x, 32.0),
 		observation_signed(global_position.z + 10.0, 20.0),
-		observation_signed(10.0 - global_position.z, 20.0)
+		observation_signed(10.0 - global_position.z, 20.0),
+		# Cursor relative to the player, on the same scales as enemy positions.
+		observation_signed(ai_cursor.x - global_position.x, 32.0),
+		observation_signed(ai_cursor.y - global_position.z, 20.0),
+		observation_signed(ai_cursor_velocity.x, ai_cursor_max_speed),
+		observation_signed(ai_cursor_velocity.y, ai_cursor_max_speed)
 	]
 
 func get_enemy_observation(enemy: Node3D) -> Array[float]:

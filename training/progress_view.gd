@@ -6,8 +6,8 @@ signal chosen(index: int)
 signal open_folder
 
 const Style := preload("res://training/replay_style.gd")
-const METRICS := ["seconds", "kills", "reward"]
-const NAMES := {"seconds": "TIME", "kills": "KILLS", "reward": "REWARD"}
+const METRICS := ["seconds", "kills", "collisions", "fell_off", "reward"]
+const NAMES := {"seconds": "TIME", "kills": "KILLS", "collisions": "COLLISIONS", "fell_off": "FELL OFF", "reward": "REWARD"}
 const PAPER := Color("0b0b0c")
 
 var rows: Array = []
@@ -29,8 +29,9 @@ func _toggles() -> Dictionary:
 	var result := {}
 	var x := 24.0
 	for key in METRICS:
-		result[key] = Rect2(x, 72, 104, 28)
-		x += 112.0
+		var width := Style.width_of(NAMES[key], 16, true) + 28.0
+		result[key] = Rect2(x, 72, width, 28)
+		x += width + 8.0
 	result["folder"] = Rect2(size.x - 204, 72, 180, 28)
 	return result
 
@@ -48,8 +49,8 @@ func _range() -> Array:
 	for row in rows:
 		low = minf(low, _x_value(row))
 		high = maxf(high, _x_value(row))
-		top = maxf(top, float(row[metric]))
-		bottom = minf(bottom, float(row[metric]))
+		top = maxf(top, float(row.get(metric, 0)))
+		bottom = minf(bottom, float(row.get(metric, 0)))
 	if high <= low:
 		high = low + 1.0
 	# Round tick steps (1, 2 or 5 x 10^n), with headroom above the best attempt.
@@ -62,7 +63,7 @@ func _range() -> Array:
 func _point(row: Dictionary, bounds: Array) -> Vector2:
 	var chart := _chart()
 	return Vector2(chart.position.x + chart.size.x * (_x_value(row) - bounds[0]) / (bounds[1] - bounds[0]),
-		chart.end.y - chart.size.y * (float(row[metric]) - bounds[2]) / (bounds[3] - bounds[2])).round()
+		chart.end.y - chart.size.y * (float(row.get(metric, 0)) - bounds[2]) / (bounds[3] - bounds[2])).round()
 
 func _color(row: Dictionary) -> Color:
 	return Style.BEHIND if row.status == "died" else Style.GOLD if row.status == "timeout" else Style.DIM
@@ -103,15 +104,15 @@ func _draw() -> void:
 			16, Style.DIM, false, HORIZONTAL_ALIGNMENT_CENTER, 120)
 	Style.text(self, Vector2(chart.position.x, chart.position.y - 14), NAMES[metric] + (" (S)" if metric == "seconds" else ""), 16, Style.TEXT)
 	Style.text(self, Vector2(chart.end.x, chart.end.y + 50), "TRAINING STEPS", 16, Style.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT)
-	# Average of recent finished attempts, so the trend shows through the noise.
-	var finished := rows.filter(func(row): return row.status in ["died", "timeout"])
+	# Average of recent finished training attempts, so the trend shows through the noise.
+	var finished := rows.filter(func(row): return row.status in ["died", "timeout"] and row.get("mode") != "evaluation")
 	var window := maxi(5, finished.size() / 25)
 	var line := PackedVector2Array()
 	var total := 0.0
 	for i in finished.size():
-		total += float(finished[i][metric])
+		total += float(finished[i].get(metric, 0))
 		if i >= window:
-			total -= float(finished[i - window][metric])
+			total -= float(finished[i - window].get(metric, 0))
 		var average := total / mini(i + 1, window)
 		var p := _point(finished[i], bounds)
 		line.append(Vector2(p.x, chart.end.y - chart.size.y * (average - bounds[2]) / (bounds[3] - bounds[2])))
@@ -119,7 +120,13 @@ func _draw() -> void:
 		draw_polyline(line, Style.TEXT, 2.0)
 	for row in rows:
 		var point := _point(row, bounds)
-		if row.status in ["died", "timeout"]:
+		if row.get("mode") == "evaluation":
+			# Evaluation games (no noise): a diamond, so they stand apart.
+			var diamond := PackedVector2Array([point + Vector2(0, -7), point + Vector2(7, 0), point + Vector2(0, 7), point + Vector2(-7, 0)])
+			draw_colored_polygon(diamond, PAPER)
+			diamond = PackedVector2Array([point + Vector2(0, -5), point + Vector2(5, 0), point + Vector2(0, 5), point + Vector2(-5, 0)])
+			draw_colored_polygon(diamond, _color(row))
+		elif row.status in ["died", "timeout"]:
 			draw_rect(Rect2(point - Vector2(5, 5), Vector2(10, 10)), PAPER)
 			draw_rect(Rect2(point - Vector2(4, 4), Vector2(8, 8)), _color(row))
 		else:
@@ -131,7 +138,7 @@ func _draw() -> void:
 		_tooltip(rows[hover], _point(rows[hover], bounds))
 
 func _legend(right_top: Vector2, window: int) -> void:
-	var entries := [[Style.BEHIND, "DIED"], [Style.GOLD, "SURVIVED"], [Style.DIM, "CUT SHORT"], [Style.TEXT, "AVG OF %d" % window]]
+	var entries := [[Style.BEHIND, "DIED"], [Style.GOLD, "SURVIVED"], [Style.DIM, "CUT SHORT"], [Style.TEXT, "EVAL"], [Style.TEXT, "AVG OF %d" % window]]
 	var width := 0.0
 	for entry in entries:
 		width += Style.width_of(entry[1]) + 40.0
@@ -139,6 +146,9 @@ func _legend(right_top: Vector2, window: int) -> void:
 	for entry in entries:
 		if entry[1].begins_with("AVG"):
 			draw_rect(Rect2(x, right_top.y - 1, 14, 2), entry[0])
+		elif entry[1] == "EVAL":
+			draw_polyline(PackedVector2Array([Vector2(x + 6, right_top.y - 5), Vector2(x + 11, right_top.y),
+				Vector2(x + 6, right_top.y + 5), Vector2(x + 1, right_top.y), Vector2(x + 6, right_top.y - 5)]), entry[0], 1.0)
 		else:
 			draw_rect(Rect2(x + 2, right_top.y - 4, 8, 8), entry[0], entry[1] != "CUT SHORT", 1.0)
 		Style.text(self, Vector2(x + 20, right_top.y + 6), entry[1], 16, Style.DIM)
@@ -146,7 +156,10 @@ func _legend(right_top: Vector2, window: int) -> void:
 
 func _tooltip(row: Dictionary, point: Vector2) -> void:
 	var ending: String = {"died": "DIED", "timeout": "SURVIVED"}.get(row.status, "CUT SHORT")
-	var detail := "%s  %d KILLS  %s STEPS" % [Style.clock(row.seconds), row.kills, Style.steps(_x_value(row))]
+	if row.get("mode") == "evaluation":
+		ending += "  EVAL"
+	var detail := "%s  %d KILLS  %d COLLISIONS  %d FELL" % [Style.clock(row.seconds), row.kills,
+		row.get("collisions", 0), row.get("fell_off", 0)]
 	var box := Rect2(point + Vector2(14, -64), Vector2(Style.width_of(detail) + 28, 58))
 	box.position.x = minf(box.position.x, size.x - box.size.x - 10)
 	box.position.y = maxf(box.position.y, 10)

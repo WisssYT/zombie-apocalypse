@@ -3,14 +3,17 @@ extends Control
 ## with the best attempt recorded so far (most kills).
 
 const Style := preload("res://training/replay_style.gd")
-const ROWS := 4
+const ROWS := 3
 const ROW := 22.0
-const SPLITS_TOP := 112.0
+const SPLITS_TOP := 140.0
 
 var attempt := 0
 var attempts := 0
 var trained := -1
 var note := ""
+var noise := -1.0
+var collisions := 0
+var fell_off := 0
 var status := ""
 var end_time := 0.0
 var now := 0.0
@@ -29,14 +32,22 @@ func _draw() -> void:
 	Style.text(self, Vector2(14, 28), "ATTEMPT %d" % attempt, 16, Style.TEXT, true)
 	Style.text(self, Vector2(right, 28), "OF %d" % attempts, 16, Style.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT)
 	var detail := "UNTRAINED" if trained <= 0 else "%s STEPS" % Style.steps(trained)
-	Style.text(self, Vector2(14, 50), detail, 16, Style.DIM)
 	if note != "":
-		Style.text(self, Vector2(right, 50), note, 16, Style.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT)
+		detail += "  " + note
+	Style.text(self, Vector2(14, 50), detail, 16, Style.DIM)
+	if noise == 0.0:
+		Style.text(self, Vector2(right, 50), "NO NOISE", 16, Style.GOLD, false, HORIZONTAL_ALIGNMENT_RIGHT)
+	elif noise > 0.0:
+		Style.text(self, Vector2(right, 50), "NOISE %.2f" % noise, 16, Style.DIM, false, HORIZONTAL_ALIGNMENT_RIGHT)
+	Style.text(self, Vector2(14, 126), "COLLISIONS %d" % collisions, 16, Style.TEXT if collisions else Style.DIM)
+	Style.text(self, Vector2(right, 126), "FELL OFF %d" % fell_off, 16, Style.OFF if fell_off else Style.DIM,
+		false, HORIZONTAL_ALIGNMENT_RIGHT)
 	var finished := now >= end_time - 0.001
 	var color := Style.AHEAD
 	if finished:
 		color = Style.BEHIND if status == "died" else Style.GOLD if status == "timeout" else Style.DIM
 	Style.text(self, Vector2(right, 98), Style.clock(now), 48, color, true, HORIZONTAL_ALIGNMENT_RIGHT)
+	draw_line(Vector2(0, 108), Vector2(w, 108), Style.LINE)
 	draw_line(Vector2(0, SPLITS_TOP - 4), Vector2(w, SPLITS_TOP - 4), Style.LINE)
 	var count := maxi(kills.size(), best.size())
 	var done := 0

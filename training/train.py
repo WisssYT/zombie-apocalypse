@@ -1,5 +1,6 @@
 """Single-instance PPO entry point, meant to run on Kaggle/Colab (see notebook)."""
 import argparse
+import math
 from pathlib import Path
 import time
 
@@ -34,6 +35,8 @@ def main():
     parser.add_argument("--episode-seconds", type=float, default=60)
     parser.add_argument("--n-steps", type=int, default=2048,
                         help="Decisions per PPO rollout; one weight snapshot is recorded per rollout")
+    parser.add_argument("--noise", type=float, default=1.0,
+                        help="Starting exploration noise (action std); PPO then learns its own")
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--no-replays", action="store_true", help="Disable episode recording")
     parser.add_argument("--resume", help="A model .zip, or 'latest' for the newest one in --output")
@@ -45,7 +48,8 @@ def main():
                      episode_seconds=args.episode_seconds)
     recorder = None if args.no_replays else EpisodeRecorder(game, args.output)
     env = Monitor(recorder if recorder is not None else game,
-                  str(args.output / f"episodes-{int(time.time())}"))
+                  str(args.output / f"episodes-{int(time.time())}"),
+                  info_keywords=("kills", "collisions", "hound_knockdowns", "tripped", "fell_off"))
     try:
         if resume:
             print(f"Resuming from {resume}")
@@ -53,7 +57,8 @@ def main():
         else:
             model = PPO("MlpPolicy", env, device="cpu", seed=1, verbose=1,
                         n_steps=args.n_steps, batch_size=64,
-                        policy_kwargs=dict(net_arch=dict(pi=[128, 128], vf=[128, 128])))
+                        policy_kwargs=dict(net_arch=dict(pi=[128, 128], vf=[128, 128]),
+                                           log_std_init=math.log(args.noise)))
         callbacks = [CheckpointCallback(save_freq=10_000,
                                         save_path=str(args.output / "checkpoints"))]
         if args.hours:

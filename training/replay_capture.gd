@@ -70,4 +70,5 @@ static func capture(session: Node, game: Node, player: Node3D, elapsed: float) -
 		"player_position": [player.position.x, player.position.y, player.position.z],
 		"health": player.health, "ammo": player.ammo_in_magazine,
 		"reserve": player.reserve_ammo, "kills": game.kills,
-		"reloading": player.reloading, "dashing": player.dash_time_left > 0}
+		"reloading": player.reloading, "dashing": player.dash_time_left > 0,
+		"stats": game.stats.duplicate()}

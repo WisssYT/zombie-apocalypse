@@ -42,7 +42,7 @@ def main():
     for entry in entries:
         arrays, metadata = load_episode(session, entry["id"])
         steps = metadata["steps"]
-        assert arrays["observations"].shape == (steps + 1, 586)
+        assert arrays["observations"].shape == (steps + 1, 590)
         np.testing.assert_array_equal(np.clip(arrays["raw_actions"], -1, 1), arrays["actions"])
         for step in range(steps):
             net = forward(load_policy(session, arrays["policy_ids"][step]), arrays["observations"][step])

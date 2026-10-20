@@ -3,6 +3,7 @@ extends RefCounted
 ## Pure Godot: the viewing PC needs no Python, torch or GPU.
 
 const POLICY_CACHE := 6
+const OBSERVATION_SCHEMA := 3  # recordings from older layouts can't be labelled correctly
 
 var root := ""
 var sessions: Array = []   # [{path, manifest, policies: {id: timestep}}]
@@ -21,7 +22,8 @@ func open(path: String) -> String:
 	found.sort()
 	for session_path in found:
 		var manifest = _read_json(session_path.path_join("manifest.json"))
-		if not manifest is Dictionary or int(manifest.get("format", 0)) != 2:
+		if not manifest is Dictionary or int(manifest.get("format", 0)) != 2 \
+				or int(manifest.get("observation_schema", 0)) != OBSERVATION_SCHEMA:
 			continue
 		var timesteps := {}
 		var listed = _read_json(session_path.path_join("policies.json"))
@@ -32,6 +34,7 @@ func open(path: String) -> String:
 		var index = _read_json(session_path.path_join("index.json"))
 		for entry in (index if index is Array else []):
 			entry["session"] = sessions.size() - 1
+			entry["mode"] = manifest.get("mode", "training")
 			entry["number"] = episodes.size() + 1
 			episodes.append(entry)
 	if episodes.is_empty():
@@ -91,6 +94,20 @@ func policy_id_at(episode: Dictionary, step: int) -> String:
 func policy_timestep(episode: Dictionary, policy_id: String) -> int:
 	return int(sessions[episode.session].policies.get(policy_id, -1))
 
+## Exploration noise the policy used for this attempt: mean action std, or 0
+## for evaluation games, which always take the network's most likely action.
+func noise(episode: Dictionary) -> float:
+	if episode.row.mode == "evaluation":
+		return 0.0
+	var net := policy(episode.session, policy_id_at(episode, 0))
+	if net.is_empty():
+		return -1.0
+	var at: int = net.offsets["actor.log_std"]
+	var total := 0.0
+	for k in 7:
+		total += exp(net.weights[at + k])
+	return total / 7.0
+
 func policy(session_index: int, policy_id: String) -> Dictionary:
 	var key := "%d/%s" % [session_index, policy_id]
 	if _policies.has(key):
@@ -130,8 +147,9 @@ func run(episode: Dictionary, step: int, branch: String) -> Dictionary:
 		return {}
 	var w: PackedFloat32Array = net.weights
 	var at: Dictionary = net.offsets
-	var x: PackedFloat32Array = episode.observations.slice(step * 586, step * 586 + 586)
-	var first := _dense(w, at[branch + ".0.weight"], at[branch + ".0.bias"], x, 586, 128)
+	var size: int = sessions[episode.session].manifest.observation_size
+	var x: PackedFloat32Array = episode.observations.slice(step * size, step * size + size)
+	var first := _dense(w, at[branch + ".0.weight"], at[branch + ".0.bias"], x, size, 128)
 	var h1: PackedFloat32Array = first[0]
 	for o in 128:
 		h1[o] = tanh(h1[o])

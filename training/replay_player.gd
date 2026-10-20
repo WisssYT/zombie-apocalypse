@@ -18,6 +18,17 @@ const RunPanel := preload("res://training/run_panel.gd")
 const TimelineView := preload("res://training/timeline_view.gd")
 const ProgressView := preload("res://training/progress_view.gd")
 const SETTINGS := "user://replay_viewer.cfg"
+# Movie Maker sizes the video from the project's window settings at startup and
+# ignores --resolution, so a video render gets them from a one-off override.cfg
+# that the renderer deletes as soon as it has started.
+const VIDEO_OVERRIDE := "res://override.cfg"
+const VIDEO_OVERRIDE_TEXT := """; Written by the replay viewer for one video render; deleted when it starts.
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1920
+window/size/window_height_override=1080
+"""
 const SPEEDS := [0.25, 0.5, 1.0, 2.0, 4.0]
 const SPEED_LABELS := [".25X", ".5X", "1X", "2X", "4X"]
 # Same layers as the game: the body is hidden from the first-person camera,
@@ -26,6 +37,15 @@ const BODY_LAYER := 2
 const FIRST_PERSON_LAYER := 1 << 10
 const FPS_CULL_MASK := 1048573
 const EYE_HEIGHT := 0.65
+# Observation schema v3 (AI_OBSERVATIONS.md); _ready() checks it against the player script.
+const PLAYER_VALUES := 32
+const ENEMY_VALUES := 31
+const OBS := PLAYER_VALUES + 18 * ENEMY_VALUES
+const AIM_X := 11
+const AIM_Z := 12
+const RELOAD_LEFT := 13
+const CURSOR_X := 28
+const CURSOR_Z := 29
 const GAP := 2.0
 
 var archive := Archive.new()
@@ -40,6 +60,10 @@ var branch := "actor"
 var shown_step := -1
 var highlight_row := -1
 var best_loaded_for := ""
+var video_mode := false
+var video_hold := 0.0
+var video_pid := -1
+var video_path := ""
 
 var world: Node3D
 var camera: Camera3D
@@ -59,10 +83,14 @@ var progress: Control
 var folder_dialog: FileDialog
 
 func _ready() -> void:
+	assert(PLAYER_SCRIPT.PLAYER_OBSERVATION_FIELDS.size() == PLAYER_VALUES
+		and PLAYER_SCRIPT.ENEMY_OBSERVATION_FIELDS.size() == ENEMY_VALUES
+		and PLAYER_SCRIPT.MAX_OBSERVED_ENEMIES == 18, "Observation layout changed; update the replay viewer")
 	var args := {}
 	for argument in OS.get_cmdline_user_args():
 		var parts := argument.trim_prefix("--").split("=", true, 1)
 		args[parts[0]] = parts[1] if parts.size() > 1 else ""
+	remove_video_override()
 	var settings := ConfigFile.new()
 	settings.load(SETTINGS)
 	var root: String = args.get("run", settings.get_value("viewer", "folder",
@@ -103,6 +131,16 @@ func _ready() -> void:
 		highlight_row = args["hover-row"].to_int()
 	if args.has("progress"):
 		show_progress()
+	if args.has("save-video"):
+		# Command-line export: start the renderer for this attempt and leave.
+		save_video()
+		get_tree().quit(0 if video_pid > 0 else 1)
+		return
+	if args.has("video"):
+		# Plays this attempt once at normal speed under Godot's Movie Maker, then closes.
+		video_mode = true
+		seek(0)
+		set_playing(true)
 	if args.has("screenshot"):
 		set_playing(false)
 		for i in 4:
@@ -271,6 +309,9 @@ func apply_frame() -> void:
 		shown_step = decision
 		update_brain()
 	run.now = lerpf(frame.time, frames[mini(index + 1, frames.size() - 1)].time, t)
+	var stats: Dictionary = frame.get("stats", {})
+	run.collisions = stats.get("collision", 0) + stats.get("hound_knockdown", 0)
+	run.fell_off = stats.get("fell_off", 0)
 	run.queue_redraw()
 	brain.head = at
 	brain.queue_redraw()
@@ -286,14 +327,14 @@ func update_first_person(index: int, t: float) -> void:
 	var b: Array = frames[next].player_position
 	var eye := Vector3(a[0], a[1], a[2]).lerp(Vector3(b[0], b[1], b[2]), t) + Vector3.UP * EYE_HEIGHT
 	var obs: PackedFloat32Array = episode.observations
-	var yaw := lerp_angle(atan2(-obs[index * 586 + 11], -obs[index * 586 + 12]),
-		atan2(-obs[next * 586 + 11], -obs[next * 586 + 12]), t)
+	var yaw := lerp_angle(atan2(-obs[index * OBS + AIM_X], -obs[index * OBS + AIM_Z]),
+		atan2(-obs[next * OBS + AIM_X], -obs[next * OBS + AIM_Z]), t)
 	fps_camera.global_transform = Transform3D(Basis(Vector3.UP, yaw), eye)
 	fps_pivot.global_transform = Transform3D(
 		fps_camera.global_basis * Basis(Vector3.BACK, PLAYER_SCRIPT.FPS_WEAPON_CANT),
 		fps_camera.global_transform * PLAYER_SCRIPT.FPS_WEAPON_OFFSET)
 	fps_body.reloading = frames[index].reloading
-	fps_body.reload_time_left = obs[index * 586 + 13]
+	fps_body.reload_time_left = obs[index * OBS + RELOAD_LEFT]
 	fps_body.dead = frames[index].health <= 0.0
 
 func update_hud(frame: Dictionary) -> void:
@@ -305,7 +346,8 @@ func update_hud(frame: Dictionary) -> void:
 func update_brain() -> void:
 	var result := archive.run(episode, shown_step, branch)
 	var applied: PackedFloat32Array = episode.actions.slice(shown_step * 7, shown_step * 7 + 7)
-	keys.show_action(applied)
+	var obs: PackedFloat32Array = episode.observations
+	keys.show_action(applied, Vector2(obs[shown_step * OBS + AIM_X], obs[shown_step * OBS + AIM_Z]))
 	brain.note = integrity_note(result)
 	brain.show_result(result, applied)
 
@@ -349,6 +391,15 @@ func set_playing(value: bool) -> void:
 	timeline.queue_redraw()
 
 func _process(delta: float) -> void:
+	if video_pid > 0 and not OS.is_process_running(video_pid):
+		video_pid = -1
+		timeline.message = "SAVED " + video_path.get_file().to_upper()
+		timeline.queue_redraw()
+	if video_mode and not playing:
+		video_hold += delta
+		if video_hold > 1.5:
+			get_tree().quit()
+		return
 	if not playing or frames.is_empty() or progress.visible:
 		return
 	play_time += delta * SPEEDS[speed_index]
@@ -405,7 +456,8 @@ func show_episode(index: int) -> void:
 	run.attempts = archive.episodes.size()
 	run.trained = archive.policy_timestep(loaded, archive.policy_id_at(loaded, 0))
 	var label: String = archive.sessions[row.session].manifest.get("label", "")
-	run.note = "" if label == "PPO training" else "TEST RUN"
+	run.note = "EVALUATION" if row.mode == "evaluation" else "" if label == "PPO training" else "TEST RUN"
+	run.noise = archive.noise(loaded)
 	run.status = loaded.meta.status
 	run.end_time = frames.back().time
 	run.kills = kill_times(frames)
@@ -451,6 +503,35 @@ func on_bar(control: String) -> void:
 			timeline.queue_redraw()
 		"attempts":
 			show_progress()
+		"video":
+			save_video()
+
+## Renders the current attempt to training/videos/ in a separate Godot process,
+## using Movie Maker so every frame is captured at a steady 60 fps.
+func save_video() -> void:
+	if current < 0 or video_pid > 0:
+		return
+	var folder := ProjectSettings.globalize_path("res://training/videos")
+	DirAccess.make_dir_recursive_absolute(folder)
+	FileAccess.open(folder.path_join(".gdignore"), FileAccess.WRITE)
+	video_path = folder.path_join("attempt-%d.avi" % archive.episodes[current].number)
+	var override := FileAccess.open(VIDEO_OVERRIDE, FileAccess.WRITE)
+	override.store_string(VIDEO_OVERRIDE_TEXT)
+	override.close()
+	video_pid = OS.create_process(OS.get_executable_path(), PackedStringArray([
+		"--path", ProjectSettings.globalize_path("res://"), "--write-movie", video_path,
+		"res://training/replay.tscn", "--", "--run=" + archive.root,
+		"--episode=%d" % (current + 1), "--video"]))
+	if video_pid < 0:
+		remove_video_override()
+	timeline.message = "SAVING VIDEO..." if video_pid > 0 else "COULD NOT START GODOT"
+	timeline.queue_redraw()
+
+static func remove_video_override() -> void:
+	# Only ever removes the file save_video() wrote, never one made by hand.
+	if FileAccess.file_exists(VIDEO_OVERRIDE) \
+			and FileAccess.get_file_as_string(VIDEO_OVERRIDE).begins_with(VIDEO_OVERRIDE_TEXT.get_slice("\n", 0)):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(VIDEO_OVERRIDE))
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo() and event.physical_keycode not in [KEY_LEFT, KEY_RIGHT]:
@@ -499,7 +580,7 @@ func make_feed(share_with: SubViewport = null) -> SubViewportContainer:
 func make_ui() -> void:
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_title("Zombie Apocalypse - replays")
-		if not Array(OS.get_cmdline_user_args()).any(func(arg): return arg.begins_with("--screenshot")):
+		if not Array(OS.get_cmdline_user_args()).any(func(arg): return arg.begins_with("--screenshot") or arg == "--video"):
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
@@ -617,14 +698,17 @@ static func _place(control: Control, rect: Rect2) -> void:
 	control.size = rect.size
 
 func draw_highlight() -> void:
+	if frames.is_empty() or camera == null:
+		return
+	draw_cursor()
 	# Brackets whatever the hovered input row describes, on the overhead feed.
-	if highlight_row < 0 or frames.is_empty() or camera == null:
+	if highlight_row < 0:
 		return
 	var index := int(frame_position())
 	var player: Array = frames[index].player_position
 	var target := Vector3(player[0], player[1], player[2])
 	if highlight_row > 0:
-		var base := index * 586 + 28 + (highlight_row - 1) * 31
+		var base := index * OBS + PLAYER_VALUES + (highlight_row - 1) * ENEMY_VALUES
 		if episode.observations[base] == 0.0:
 			return
 		target += Vector3(episode.observations[base + 1] * 32.0,
@@ -637,6 +721,27 @@ func draw_highlight() -> void:
 		overlay.draw_line(corner, corner + Vector2(0, inward.y), Style.GOLD, 2.0)
 	Style.text(overlay, box.position + Vector2(box.size.x + 8, 14), "YOU" if highlight_row == 0 else "ENEMY %d" % highlight_row,
 		16, Style.GOLD, true)
+
+func draw_cursor() -> void:
+	# The AI's mouse pointer, where a player's cursor would be on screen.
+	var at := frame_position()
+	var index := int(at)
+	var next := mini(index + 1, frames.size() - 1)
+	var obs: PackedFloat32Array = episode.observations
+	var points := []
+	for i in [index, next]:
+		var player: Array = frames[i].player_position
+		points.append(Vector3(player[0] + obs[i * OBS + CURSOR_X] * 32.0, player[1],
+			player[2] + obs[i * OBS + CURSOR_Z] * 20.0))
+	var tip := camera.unproject_position(points[0].lerp(points[1], at - index)).round()
+	var arrow := PackedVector2Array([Vector2(0, 0), Vector2(0, 17), Vector2(4, 13), Vector2(7, 20),
+		Vector2(10, 19), Vector2(7, 12), Vector2(12, 12)])
+	var outline := PackedVector2Array()
+	for point in arrow:
+		outline.append(tip + point)
+	overlay.draw_colored_polygon(outline, Color.WHITE)
+	outline.append(outline[0])
+	overlay.draw_polyline(outline, Color.BLACK, 1.0)
 
 # ---------------------------------------------------------------- check
 

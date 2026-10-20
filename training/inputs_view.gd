@@ -1,20 +1,23 @@
 extends Control
 ## Input display, NohBoard style: the controls the network sent this decision.
 ## Movement is analog, so the keys light in proportion and the stick shows the
-## exact vector; the dial is the requested aim.
+## exact vector. The arrow on the mouse is how it pushes the mouse; the dial is
+## where the gun actually points.
 
 const Style := preload("res://training/replay_style.gd")
 const KEY := 34.0
 const GAP := 4.0
 
 var action := PackedFloat32Array()
+var aim := Vector2.ZERO
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(340, 124)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func show_action(value: PackedFloat32Array) -> void:
+func show_action(value: PackedFloat32Array, gun_aim: Vector2) -> void:
 	action = value
+	aim = gun_aim
 	queue_redraw()
 
 func _draw() -> void:
@@ -38,8 +41,13 @@ func _draw() -> void:
 		draw_rect(Rect2(mouse.position + Vector2(1, 1), Vector2(KEY * 0.5 - 1, 24)), Style.TEXT)
 	draw_line(mouse.position + Vector2(KEY * 0.5, 0), mouse.position + Vector2(KEY * 0.5, 25), Color(Style.TEXT, 0.3))
 	draw_line(mouse.position + Vector2(0, 25), mouse.position + Vector2(KEY, 25), Color(Style.TEXT, 0.3))
+	var push := Vector2(action[2], action[3]).limit_length(1.0)
+	var middle := mouse.position + Vector2(KEY * 0.5, 44)
+	if push.length() > 0.05:
+		draw_line(middle, middle + push * 14.0, Style.ON, 2.0)
+		draw_rect(Rect2(middle + push * 14.0 - Vector2(2, 2), Vector2(4, 4)), Style.ON)
 	_ring(Vector2(232, 62), 42, move, false)
-	_ring(Vector2(304, 62), 26, Vector2(action[2], action[3]), true)
+	_ring(Vector2(304, 62), 26, aim, true)
 
 func _key(rect: Rect2, label: String, amount: float) -> void:
 	amount = clampf(amount, 0.0, 1.0)
