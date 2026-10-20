@@ -14,10 +14,6 @@ config/name="Zombie apocalypse"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
-[display]
-
-window/size/mode=3
-
 [input]
 
 move_up={

@@ -1,6 +1,6 @@
-[gd_resource type="ArrayMesh" format=4]
+[gd_resource type="ArrayMesh" format=4 uid="uid://brecxmepl8pog"]
 
-[ext_resource type="Texture2D" path="res://models/skyline/skyline_atlas.png" id="1_xrvad"]
+[ext_resource type="Texture2D" uid="uid://130cwgyb4tya" path="res://models/skyline/skyline_atlas.png" id="1_xrvad"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xrvad"]
 transparency = 2

@@ -4,23 +4,21 @@
 [ext_resource type="PackedScene" path="res://floor_border.tscn" id="2_floor_border"]
 [ext_resource type="PackedScene" path="res://gun_model.tscn" id="3_gun"]
 [ext_resource type="Script" uid="uid://c6imqkxmn4ph" path="res://survival.gd" id="4_survival"]
-[ext_resource type="AudioStream" path="res://audio/ak74_shot_351437.wav" id="5_shoot"]
-[ext_resource type="AudioStream" path="res://audio/gunreload1.wav" id="6_reload"]
+[ext_resource type="AudioStream" uid="uid://h0le1jwn65qx" path="res://audio/ak74_shot_351437.wav" id="5_shoot"]
+[ext_resource type="AudioStream" uid="uid://blljyr7wv7jgp" path="res://audio/gunreload1.wav" id="6_reload"]
 [ext_resource type="AudioStream" uid="uid://bhr0vkutp3or0" path="res://audio/dry_fire.wav" id="7_empty"]
 [ext_resource type="AudioStream" uid="uid://brmx2w8efugvr" path="res://audio/hurt.wav" id="8_hurt"]
 [ext_resource type="Script" path="res://survivor_visual.gd" id="9_survivor_visual"]
 [ext_resource type="PackedScene" uid="uid://d28km60cevr1x" path="res://models/psx_people/glb/survivor_woman.glb" id="10_survivor"]
 [ext_resource type="PackedScene" path="res://apocalyptic_city.tscn" id="11_city"]
-[ext_resource type="Texture2D" path="res://models/roof_concrete/worn_concrete_diffuse_128.png" id="12_concrete"]
-[ext_resource type="Texture2D" path="res://models/roof_concrete/worn_concrete_normal_gl_128.png" id="14_roof_normal"]
-[ext_resource type="Script" path="res://first_person_arms.gd" id="13_fp_arms"]
+[ext_resource type="Texture2D" uid="uid://vtfg7lj76l51" path="res://models/roof_concrete/worn_concrete_diffuse_128.png" id="12_concrete"]
+[ext_resource type="Script" uid="uid://cvipkm0sa5l5x" path="res://first_person_arms.gd" id="13_fp_arms"]
+[ext_resource type="Texture2D" uid="uid://b4n7i83eccu8v" path="res://models/roof_concrete/worn_concrete_normal_gl_128.png" id="14_roof_normal"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_e2o6t"]
 resource_name = "PSX Dark Worn Concrete"
 albedo_color = Color(0.34, 0.38, 0.43, 1)
 albedo_texture = ExtResource("12_concrete")
-texture_filter = 3
-roughness = 1.0
 normal_enabled = true
 normal_scale = 0.22
 normal_texture = ExtResource("14_roof_normal")
@@ -66,14 +64,15 @@ directional_shadow_max_distance = 70.0
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=921942614]
 transform = Transform3D(0.9985082, 0.006358876, 0.05423051, -0.04301688, 0.7033199, 0.70957077, -0.033629324, -0.71084505, 0.7025443, 0.74957275, 15, 16.67566)
+cull_mask = 1047551
 projection = 1
 current = true
-cull_mask = 1047551
 size = 34.0
 
 [node name="Player _ CharacterBody3D" type="CharacterBody3D" parent="." unique_id=353800311]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.01, 0)
 script = ExtResource("1_80nbo")
+debug_observations = false
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Player _ CharacterBody3D" unique_id=774499914]
 visible = false
@@ -92,11 +91,11 @@ transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0.35, 0.237, -0.4405
 [node name="Muzzle" type="Marker3D" parent="Player _ CharacterBody3D/WeaponPivot" unique_id=946453149]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 0.25325, -0.8955)
 
-[node name="FirstPersonArms" type="Node3D" parent="Player _ CharacterBody3D/WeaponPivot"]
+[node name="FirstPersonArms" type="Node3D" parent="Player _ CharacterBody3D/WeaponPivot" unique_id=110928917]
 transform = Transform3D(0.81915206, 0, -0.57357645, 0, 1, 0, 0.57357645, 0, 0.81915206, 0.14, 0.26, -0.04)
 script = ExtResource("13_fp_arms")
 
-[node name="Model" parent="Player _ CharacterBody3D/WeaponPivot/FirstPersonArms" instance=ExtResource("10_survivor")]
+[node name="Model" parent="Player _ CharacterBody3D/WeaponPivot/FirstPersonArms" unique_id=2122049956 instance=ExtResource("10_survivor")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, -1.392, 0)
 
 [node name="FirstPersonRig" type="Node3D" parent="Player _ CharacterBody3D" unique_id=1843963537]
