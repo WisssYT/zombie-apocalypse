@@ -250,7 +250,7 @@ using that ammo supply; decide on resupply before pursuing indefinite combat sur
 | `survivor_visual.gd`, `first_person_arms.gd` | Player visuals and arms. |
 | `CREDITS.txt`, `audio/AK_AUDIO_SOURCE.txt` | Asset/sound attribution and adaptations. |
 
-GitHub: **WisssYT/zombie-apocalypse**, private repository, branch **main**.
+GitHub: **WisssYT/zombie-apocalypse**, public repository, branch **main**.
 Recoil/audio were already pushed in `1d62d30`; this summary accompanies the later
 AI groundwork and the current saved project/editor changes. No substantive
 survival training experiment has been completed; no survival results should be claimed yet.

@@ -29,9 +29,9 @@ The numerical observation schema is unchanged: see `../AI_OBSERVATIONS.md`.
 ## Training on Kaggle or Colab
 
 Upload or open `training/zombie_training.ipynb` and follow the steps at its top: turn
-internet on (Kaggle), add a `GITHUB_TOKEN` secret so it can clone this private repo,
-and run all cells. It downloads Godot 4.6.3 for Linux, installs the pinned packages
-in their own environment, runs the two wiring checks, then trains headless.
+internet on (Kaggle) and run all cells. The repository is public, so no login is
+needed. It downloads Godot 4.6.3 for Linux, installs the pinned packages in their
+own environment, runs the two wiring checks, then trains headless.
 
 - Kaggle: use **Save Version → Save & Run All** for long runs; output stays in
   `/kaggle/working/runs`. To continue later, attach the previous version as an input;
